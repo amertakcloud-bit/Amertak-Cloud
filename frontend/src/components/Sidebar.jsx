@@ -6,7 +6,7 @@ import { useAuth } from "../context/AuthContext";
 
 import { NavLink } from "react-router-dom";
 
-import favIcon from "../assets/favicon/favIcon.svg";
+import favIcon from "../assets/favicon/favicon.svg";
 // Sidebar
 // Renders the full navigation list. Handles:
 // - Mobile off-canvas (isOpen / onClose)
