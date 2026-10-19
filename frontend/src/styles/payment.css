@@ -1,0 +1,231 @@
+/* Payment (KHQR) dialog */
+/* Adapted from test.html, themed with the app's CSS variables. */
+
+.qr-dialog {
+  width: 100%;
+  max-width: 340px;
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: .5rem;
+  background: var(--surface);
+  color: var(--text);
+  text-align: center;
+  font-family: inherit;
+}
+
+.qr-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.qr-dialog h1 {
+  font-size: 1.15rem;
+  margin: 0 0 4px;
+}
+
+.qr-dialog p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+/* Header row: plan label + close button */
+.qr-dialog .qr-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.qr-dialog .qr-label {
+  opacity: 0;
+  user-select: none;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+
+.qr-dialog .close {
+  color: var(--text-muted);
+  border: 0;
+  width: auto;
+  margin: 0;
+  padding: .5rem;
+  border-radius: 5px;
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.qr-dialog .close:hover {
+  background: var(--primary-soft);
+  color: var(--text);
+}
+
+/* Amount + QR */
+.qr-dialog .amt {
+  font-size: 1.6rem;
+  font-weight: 700;
+  margin: 4px 0 12px;
+}
+
+.qr-dialog .qr {
+  width: 100%;
+
+  aspect-ratio: 1;
+  margin: 0 auto 8px;
+  padding: 8px;
+  border-radius: 12px;
+  background: transparent;
+  display: block;
+  object-fit: contain;
+}
+
+.qr-dialog .qr-fallback {
+  margin: 0 0 8px;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.qr-dialog .expires {
+  text-align: center;
+  display: flex;
+  justify-content: center;
+}
+.qr-dialog .timer {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  font-size: small;
+}
+
+/* Status pill */
+.qr-dialog .status {
+  margin-top: 10px;
+  font-size: 0.5rem;
+  color: var(--text-muted);
+}
+
+.qr-dialog .status[data-s="scanned"] {
+  color: #c77700;
+}
+
+.qr-dialog .status[data-s="paid"] {
+  color: #12a150;
+}
+
+/* Buttons */
+.qr-dialog .btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  width: 70%;
+  margin: 0 auto;
+  box-sizing: border-box;
+  margin-top: 14px;
+  padding: .3rem;
+  font: inherit;
+  font-weight: 700;
+  border: 0;
+  border-radius: 10px;
+  background: var(--text);
+  color: var(--bg);
+  cursor: pointer;
+  text-decoration: none;
+
+  i {
+    background: var(--bg);
+    color: var(--text);
+    width: 35px;
+    height: 35px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+  }
+}
+
+.qr-dialog .btn:hover {
+  background: var(--primary-hover);
+}
+
+.qr-dialog .err {
+  margin-top: 12px;
+  color: var(--primary);
+  font-size: 0.9rem;
+  min-height: 1.2em;
+
+  button {
+    background: var(--text);
+    color: var(--bg);
+    padding: .3rem;
+    border-radius: 50px;
+    display: flex;
+    align-items: center;
+    margin: auto;
+    margin-top: .5rem;
+    gap: .3rem;
+
+    i {
+      background: var(--bg);
+      color: var(--text);
+      width: 35px;
+      height: 35px;
+      font-size: 20px;
+      border-radius: 100px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+  }
+}
+
+/* Done view */
+.qr-dialog .big {
+  font-size: 3rem;
+  margin: 8px 0;
+}
+
+/* Token award shown after a successful payment */
+.qr-dialog .token-award {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 0.9rem;
+}
+
+.qr-dialog .token-award .token-award-amount {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+.qr-dialog .token-award .token-award-total {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.qr-dialog .token-award.error {
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+}
+
+.qr-dialog .token-retry {
+  margin-top: 8px;
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  background: var(--surface-hover);
+  color: var(--text);
+  border: 1px solid var(--border);
+}

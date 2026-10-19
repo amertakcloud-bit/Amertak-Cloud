@@ -1,0 +1,35 @@
+{
+  "name": "amertakcloud-backend",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "AmertakCloud API — auth, payments, CloudShare and the tool APIs (Khmer SRT, TTS, QR, Image→Prompt, Video, Audio). Runs locally and on Vercel.",
+  "main": "server.js",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "dev:memory": "node scripts/dev-memory-db.js",
+    "test": "node --test \"tests/*.test.js\""
+  },
+  "dependencies": {
+    "@google/genai": "^2.30.0",
+    "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.0",
+    "ffmpeg-static": "^5.3.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.9.5",
+    "multer": "^2.0.2",
+    "node-edge-tts": "^1.2.11",
+    "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "mongodb-memory-server": "^10.1.4"
+  }
+}

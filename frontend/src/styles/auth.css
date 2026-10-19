@@ -1,0 +1,440 @@
+
+
+.login-page {
+    justify-content: center;
+    align-items: center;
+
+    .card {
+        max-width: 60%;
+        margin: 0 auto;
+        align-items: center;
+        justify-content: center;
+
+        .login-heading {
+            display: flex;
+            align-items: center;
+            gap: .5rem;
+            font-size: 2rem;
+            h1 {
+                font-size: 2rem;
+                font-weight: 900;
+            }
+        }
+
+        form {
+            .input {
+                padding: .5rem;
+                gap: .5rem;
+                display: grid;
+
+                p {
+                    scale: .95;
+                }
+                input {
+                    background: var(--glass-bg);
+                    border: 1px solid var(--border);
+                    border-radius: 10px;
+                    display: block;
+                    padding: .5rem;
+                    margin: auto;
+                    width: 95%;
+                    height: 50px;
+                    color: var(--primary);
+                }
+            }
+
+            .button {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                justify-content: center;
+                margin: 0 auto;
+                gap: .5rem;
+                width: 90%;
+                
+                button {
+                    display: flex;
+                    align-items: center;
+                    font-size: 1rem;
+                    gap: .5rem;
+                    background-color: var(--text);
+                    color: var(--bg);
+                    border: 1px solid var(--border);
+                    border-radius: 50px;
+                    padding: .2rem;
+                    font-weight: 800;
+
+                    i {
+                        background: var(--bg);
+                        color: var(--text);
+                        font-size: 1.5rem;
+                        width: 40px;
+                        height: 40px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        border-radius: 50px;
+                        font-weight: normal;
+                        flex-shrink: 0;
+                    }
+                }
+            }
+
+            @media (max-width: 450px) {
+                .button {
+                    button:nth-child(3) {
+                        flex-basis: 100%;
+                    }
+                }
+            }
+        }
+
+        a {
+            text-decoration: underline;
+            color: var(--primary);
+        }
+
+    }
+}
+
+@media (max-width: 450px) {
+    .login-page .card {
+        max-width: 100% !important;
+    }
+}
+
+/* ===== Auth additions (messages, loading, links, checkbox) ===== */
+
+.login-page {
+    padding: 20px 0;
+    width: 100%;
+}
+
+.auth-alert {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    width: min(90vw, 360px);
+    padding: .85rem 1rem .95rem;
+    border-radius: 14px;
+    font-size: .9rem;
+    border: 1px solid var(--border);
+    line-height: 1.4;
+    overflow: hidden;
+    transform: translateX(120%);
+    opacity: 0;
+    animation: alertSlideIn .28s ease forwards;
+    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.2);
+}
+
+.auth-alert::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    height: 3px;
+    width: 100%;
+    background: currentColor;
+    opacity: 0.8;
+    transform-origin: left center;
+    animation: alertProgress 3s linear forwards;
+}
+
+.auth-alert.error {
+    background: var(--bg);
+    border-color: var(--border);
+    color: #f87171;
+}
+
+.auth-alert.success {
+    background: rgba(16, 185, 129, 0.08);
+    border-color: rgba(16, 185, 129, 0.32);
+    color: #34d399;
+}
+
+.auth-alert i {
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+@keyframes alertSlideIn {
+    from {
+        opacity: 0;
+        transform: translateX(120%);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes alertProgress {
+    from {
+        transform: scaleX(1);
+    }
+    to {
+        transform: scaleX(0);
+    }
+}
+
+.auth-subtitle {
+    width: 90%;
+    margin: 0 auto .75rem;
+    text-align: center;
+    font-size: .9rem;
+}
+
+.auth-links-row {
+    display: flex;
+    justify-content: flex-end;
+    width: 95%;
+    margin: .25rem auto 0;
+}
+
+.auth-link {
+    font-size: .85rem;
+    color: var(--primary);
+    text-decoration: none;
+}
+
+.auth-link:hover {
+    text-decoration: underline;
+}
+
+.auth-switch {
+    margin-top: .75rem;
+    text-align: center;
+    font-size: .9rem;
+}
+
+.auth-switch a {
+    color: var(--primary);
+    text-decoration: underline;
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+}
+
+.auth-checkbox {
+    display: flex;
+    align-items: center;
+    margin: auto;
+    font-size: .5rem;
+    color: var(--text-muted);
+    gap: .5rem;
+    cursor: pointer;
+}
+
+.auth-checkbox input {
+    width: 10px;
+    height: 10px;
+    accent-color: var(--primary);
+    cursor: pointer;
+}
+
+.auth-checkbox span {
+    text-wrap: nowrap;
+}
+
+.auth-checkbox a {
+    color: var(--primary);
+    text-decoration: underline;
+}
+
+/* Loading state */
+button.is-loading {
+    opacity: .75;
+    cursor: progress;
+}
+
+button:disabled {
+    cursor: not-allowed;
+}
+
+.is-spinning {
+    animation: auth-spin 0.9s linear infinite;
+}
+
+@keyframes auth-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Session loader (ProtectedRoute / GuestRoute) */
+.auth-loader {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: .75rem;
+    min-height: 40vh;
+    color: var(--text-muted);
+}
+
+.auth-loader-icon {
+    font-size: 2.2rem;
+    color: var(--primary);
+    animation: auth-spin 1s linear infinite;
+}
+
+/* ===== Profile / user info (Dashboard + Profile page) ===== */
+
+.profile-card {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+}
+
+.profile-avatar {
+    width: 68px;
+    height: 68px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--primary);
+    flex-shrink: 0;
+}
+
+.profile-avatar-fallback {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--primary-soft);
+    color: var(--primary);
+    font-weight: 800;
+    font-size: 1.3rem;
+}
+
+.profile-info {
+    display: flex;
+    flex-direction: column;
+    gap: .3rem;
+    min-width: 0;
+}
+
+.profile-info p {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    font-size: .9rem;
+    overflow-wrap: anywhere;
+}
+
+.profile-info i {
+    color: var(--primary);
+}
+
+.welcome-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.welcome-email {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    font-size: .9rem;
+}
+
+.welcome-email i {
+    color: var(--primary);
+}
+
+.welcome-tokens,
+.profile-tokens {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    font-size: .9rem;
+    color: var(--text-muted);
+}
+
+.welcome-tokens i,
+.profile-tokens i {
+    color: var(--primary);
+}
+
+.welcome-tokens strong,
+.profile-tokens strong {
+    color: var(--primary);
+    font-weight: 800;
+}
+
+.welcome-profile-btn {
+    margin-left: auto;
+}
+
+.header-avatar {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid var(--primary);
+}
+
+.profile-btn {
+    display: flex;
+    align-items: center;
+
+    gap: .5rem;
+
+    button {
+        gap: .5rem;
+        background: var(--primary);
+        padding: .5rem;
+        border-radius: 5px;
+        color: var(--text);
+    }
+}
+
+
+.toggle-auth-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    width: 50%;
+    margin: auto;
+    padding: .3rem;
+    border-radius: 10px;
+
+    button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        background: var(--bg);
+        color: var(--text);
+        padding: .5rem;
+        font-size: 1.25rem;
+        border-radius: 7px;
+        transition: background .2s ease;
+    }
+
+    .active {
+        background: var(--text);
+        color: var(--bg);
+    }
+}
+@media (max-width: 480px) {
+    .welcome-profile-btn {
+        margin-left: 0;
+    }
+
+    .profile-card {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .profile-info p {
+        justify-content: center;
+    }
+}

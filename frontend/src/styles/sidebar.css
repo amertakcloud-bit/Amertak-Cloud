@@ -1,0 +1,246 @@
+/* Sidebar */
+
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: var(--sidebar-width);
+  height: 100%;
+  background: var(--surface);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-right: 1px solid var(--border);
+  padding: 20px 14px;
+  z-index: 40;
+  transition: transform var(--transition);
+  
+  .scroll {
+    padding: .5rem;
+    position: fixed;
+    overflow-y: auto;
+    scrollbar-width: none;
+    border-radius: 10px;
+    inset: 0;
+    height: 91%;
+    width: 100%;
+  }
+}
+
+.sidebar::-webkit-scrollbar {
+  width: 3px;
+}
+.sidebar::-webkit-scrollbar-thumb {
+  background: var(--primary-soft);
+  border-radius: 10px;
+}
+.sidebar::-webkit-scrollbar-track {
+  background: #00000042;
+}
+
+.sidebar-brand {
+  top: 0;
+  display: flex;
+  align-items: center;
+  border-radius: 10px;
+  gap: 10px;
+  padding: 8px;
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--text);
+}
+
+.sidebar-brand i {
+  color: var(--primary);
+  font-size: 1.4rem;
+}
+
+.sidebar-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sidebar-item {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Navigation link */
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  font-family: 'Kantumruy';
+  transition: background var(--transition), color var(--transition);
+}
+
+.sidebar-link i {
+  font-size: 1.2rem;
+  width: 20px;
+  text-align: center;
+}
+
+.sidebar-link:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+/* Active navigation */
+.sidebar-link.active {
+  background: var(--primary-soft);
+  color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--primary-soft);
+}
+
+.sidebar-link.active i {
+  color: var(--primary);
+}
+
+/* Dropdown */
+.sidebar-dropdown-toggle {
+  justify-content: flex-start;
+}
+
+.sidebar-caret {
+  margin-left: auto;
+  font-size: 1rem !important;
+  transition: transform var(--transition);
+}
+
+.sidebar-caret.open {
+  transform: rotate(180deg);
+}
+
+.sidebar-submenu {
+  display: grid;
+  grid-template-rows: 0fr;
+  overflow: hidden;
+  transition: grid-template-rows var(--transition);
+}
+
+.sidebar-submenu.open {
+  grid-template-rows: 1fr;
+}
+
+/* This is the single direct child required for the 0fr→1fr trick to work */
+.sidebar-submenu-inner {
+  overflow: hidden;
+  padding-left: 34px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidebar-sublink {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  transition: background var(--transition), color var(--transition);
+}
+
+.sidebar-sublink i {
+  font-size: 1rem;
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.sidebar-sublink:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.sidebar-sublink.active {
+  color: var(--primary);
+  font-weight: 500;
+}
+
+/* Collapsed (desktop icon-rail) */
+.sidebar.collapsed {
+  width: var(--sidebar-collapsed-width);
+  padding: 20px 8px;
+  overflow: visible;
+}
+
+.sidebar.collapsed .sidebar-brand {
+  justify-content: center;
+  padding: 8px 0 24px;
+}
+
+.sidebar.collapsed .sidebar-link {
+  justify-content: center;
+  padding: 10px;
+  gap: 0;
+}
+
+/* Tooltip on hover for collapsed items */
+.sidebar.collapsed .sidebar-item {
+  position: relative;
+}
+
+/* Responsive */
+.mobile-only {
+  display: none;
+}
+
+.desktop-only {
+  display: inline-flex;
+}
+
+.sidebar-backdrop {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .sidebar {
+    transform: translateX(-100%);
+    box-shadow: 0 0 40px var(--shadow);
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  /* Never collapse on mobile — always full-width off-canvas */
+  .sidebar.collapsed {
+    width: var(--sidebar-width);
+    padding: 20px 14px;
+  }
+
+  .sidebar.collapsed .sidebar-brand {
+    justify-content: flex-start;
+    padding: 8px 10px 24px;
+  }
+
+  .sidebar.collapsed .sidebar-link {
+    justify-content: flex-start;
+    padding: 10px 12px;
+    gap: 12px;
+  }
+
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 30;
+  }
+
+  .mobile-only {
+    display: inline-flex;
+  }
+
+  .desktop-only {
+    display: none;
+  }
+}
