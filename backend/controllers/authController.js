@@ -63,10 +63,10 @@ function setAuthCookie(res, user) {
 
 // Sets the HTTP-only secure cookie + returns the user as JSON.
 function sendToken(res, user, statusCode = 200) {
-  setAuthCookie(res, user);
+  const token = setAuthCookie(res, user);
   return res.status(statusCode).json({
     success: true,
-    data: { user: toPublicUser(user) },
+    data: { user: toPublicUser(user), token },
   });
 }
 
@@ -236,8 +236,10 @@ export function googleCallback(req, res) {
   if (!req.user) {
     return res.redirect(`${clientUrl()}/login?error=google_failed`);
   }
-  setAuthCookie(res, req.user); // cookie only — the browser is redirected next
-  return res.redirect(`${clientUrl()}/dashboard`);
+  const token = setAuthCookie(res, req.user);
+  // The token in the URL fragment (never sent to servers/logs) lets the frontend keep the
+  // session when the browser blocks the cross-site cookie.
+  return res.redirect(`${clientUrl()}/dashboard#token=${encodeURIComponent(token)}`);
 }
 
 // GET /api/auth/google | /google/callback when OAuth is not configured

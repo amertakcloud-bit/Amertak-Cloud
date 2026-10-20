@@ -57,7 +57,7 @@ export const adminLogin = asyncHandler(async (req, res) => {
 
   return res.status(200).json({
     success: true,
-    data: { user: toPublicUser(user) },
+    data: { user: toPublicUser(user), token },
   });
 });
 

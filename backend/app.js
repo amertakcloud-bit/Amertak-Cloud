@@ -61,7 +61,7 @@ export function createApp() {
       },
       credentials: true,
       methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-      allowedHeaders: ["Content-Type", "x-gemini-api-key"],
+      allowedHeaders: ["Content-Type", "Authorization", "x-gemini-api-key"],
       exposedHeaders: ["Content-Disposition", "X-QR-Content", "X-Voice"],
       maxAge: 86400,
     })

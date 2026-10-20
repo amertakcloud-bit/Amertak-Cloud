@@ -1,3 +1,30 @@
+# ⭐ Deploy ជា Project តែមួយ (Domain តែមួយ: https://amertakcloud.vercel.app)
+
+Repo មាន `vercel.json`, `package.json` និង `api/index.js` នៅ root រួចហើយ។ Frontend (static) និង Backend (`/api/*`) ដំណើរការក្នុង project Vercel តែមួយ ហើយ cookie login ដំណើរការធម្មតា (domain តែមួយ)។
+
+1. Push repo ទាំងមូល (`backend/`, `frontend/`, `api/`, `vercel.json`, `package.json`) ទៅ GitHub។
+2. Vercel → **Add New → Project** → ជ្រើស repo → **Root Directory = `./` (root)** → Framework: **Other** (Vercel ប្រើ `vercel.json` ដោយខ្លួនឯង) → Deploy។
+3. ដាក់ Environment Variables (**មិនត្រូវដាក់ `VITE_API_URL`** — frontend ប្រើ `/api` ដោយស្វ័យប្រវត្តិ)៖
+
+```
+NODE_ENV=production
+CLIENT_URL=https://amertakcloud.vercel.app
+SERVER_URL=https://amertakcloud.vercel.app
+SESSION_SECRET=<random វែង>
+MONGODB_URI=...
+CLOUD_MONGODB_URI=...
+GEMINI_API_KEY=...
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GOOGLE_CALLBACK_URL=https://amertakcloud.vercel.app/api/auth/google/callback
+```
+4. Google Cloud Console → Authorized redirect URI = `https://amertakcloud.vercel.app/api/auth/google/callback`។
+5. Redeploy រួចសាក `https://amertakcloud.vercel.app/api/health`។
+
+> ផ្នែកខាងក្រោមពណ៌នាការ deploy ជា project ពីរ (ជម្រើសចាស់) — មិនចាំបាច់ប្រើទេ។
+
+---
+
 # Deployment.md — ដាក់ AmertakCloud លើ Vercel (Backend + Frontend ក្នុង Workspace តែមួយ)
 
 Repo តែមួយ ប៉ុន្តែបង្កើត **Vercel Project ពីរ** (Backend មួយ, Frontend មួយ) ដោយប្រើ *Root Directory* ផ្សេងគ្នា។

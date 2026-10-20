@@ -12,6 +12,16 @@ function getJwtSecret() {
   return "insecure-dev-secret-change-me";
 }
 
+// getAuthToken
+// Cookie first; falls back to "Authorization: Bearer <jwt>" for browsers that block
+// third-party cookies (frontend and backend on different *.vercel.app domains).
+export function getAuthToken(req) {
+  const c = req.cookies?.[AUTH_COOKIE];
+  if (c) return c;
+  const h = req.headers?.authorization || "";
+  return /^Bearer\s+/i.test(h) ? h.replace(/^Bearer\s+/i, "").trim() : "";
+}
+
 // signToken
 // Creates a signed JWT that is only ever sent inside an HTTP-only cookie.
 export function signToken(userId) {
@@ -36,7 +46,7 @@ export function cookieOptions() {
 // Used to guard private API routes (401 when missing/invalid).
 export async function protect(req, res, next) {
   try {
-    const token = req.cookies?.[AUTH_COOKIE];
+    const token = getAuthToken(req);
 
     if (!token) {
       return res.status(401).json({

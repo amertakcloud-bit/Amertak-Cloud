@@ -1,4 +1,4 @@
-import { API_URL } from "./api";
+import { API_URL, getToken } from "./api";
 import { geminiHeaders } from "./geminiKey";
 
 // Fetch layer for the tool APIs. Every function maps 1:1 to a backend endpoint.
@@ -22,6 +22,7 @@ async function request(path, { method = "GET", json, form, headers = {}, blob = 
       signal,
       headers: {
         ...(json !== undefined ? { "Content-Type": "application/json" } : {}),
+        ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
         ...(withKey ? geminiHeaders() : {}),
         ...headers,
       },

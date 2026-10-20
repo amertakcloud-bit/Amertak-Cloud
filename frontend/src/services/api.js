@@ -2,10 +2,19 @@
 // Tiny fetch wrapper for the Express API.
 // - Base URL comes from VITE_API_URL (frontend .env) — no secrets live here.
 // - credentials: "include" sends/receives the HTTP-only auth cookie.
-const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:5000/api").replace(
+const API_URL = (import.meta.env.VITE_API_URL || (import.meta.env.PROD ? "/api" : "http://localhost:5000/api")).replace(
   /\/+$/,
   ""
 );
+
+const TOKEN_KEY = "amertak_token";
+export function getToken() { try { return localStorage.getItem(TOKEN_KEY) || ""; } catch { return ""; } }
+export function setToken(t) { try { t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY); } catch { /* private mode */ } }
+// Google login redirects back with #token=… → store it and clean the URL.
+if (typeof window !== "undefined" && /[#&]token=/.test(window.location.hash)) {
+  const m = /[#&]token=([^&]+)/.exec(window.location.hash);
+  if (m) { setToken(decodeURIComponent(m[1])); history.replaceState(null, "", window.location.pathname + window.location.search); }
+}
 
 async function request(path, { method = "GET", body, headers = {}, params } = {}) {
   const query = new URLSearchParams();
@@ -27,6 +36,7 @@ async function request(path, { method = "GET", body, headers = {}, params } = {}
       credentials: "include",
       headers: {
         ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+        ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
         ...headers,
       },
       body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -60,6 +70,8 @@ async function request(path, { method = "GET", body, headers = {}, params } = {}
     throw error;
   }
 
+  if (data?.data?.token) setToken(data.data.token);
+  if (path.startsWith("/auth/logout") || (response.status === 401 && path.startsWith("/auth/me"))) setToken("");
   return data;
 }
 
