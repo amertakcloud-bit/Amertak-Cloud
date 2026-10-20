@@ -4,6 +4,7 @@ import { useLanguage } from "../../context/LanguageContext";
 import { useAuth } from "../../context/AuthContext";
 import { useFeedback } from "../ui/Feedback";
 import { clearGeminiKey, isKeyFormatOk, maskKey, setGeminiKey, useGeminiKey } from "../../services/geminiKey";
+import { loadAccountKey, removeAccountKey, resetAccountKey, saveAccountKey, useAccountKey } from "../../services/accountKey";
 import { toolsApi } from "../../services/toolsApi";
 import { friendlyError } from "../../lib/errors";
 
@@ -12,44 +13,52 @@ import { friendlyError } from "../../lib/errors";
 export function useGeminiAccess(status) {
   const key = useGeminiKey();
   const { user } = useAuth();
+  const account = useAccountKey();
+  const uid = user?.id || user?._id || "";
+  useEffect(() => { if (uid) loadAccountKey(); else resetAccountKey(); }, [uid]);
   const serverKey = Boolean(status?.tools?.srt?.serverKey);
-  const source = key ? "user" : user && serverKey ? "server" : "none";
-  return { key, source, ready: source !== "none", serverKey, loggedIn: Boolean(user) };
+  const source = key ? "user" : user && account.hasKey ? "account" : user && serverKey ? "server" : "none";
+  return { key, source, ready: source !== "none", serverKey, loggedIn: Boolean(user), account };
 }
 
 export default function GeminiKeyPanel({ status, access, onOpenChange }) {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const toggle = (v) => { setOpen(v); onOpenChange?.(v); };
+  const removeKey = async () => {
+    clearGeminiKey();
+    if (access.account.hasKey) { try { await removeAccountKey(); } catch { /* shown on next load */ } }
+  };
 
   const tone = access.source === "none" ? "warn" : "ok";
   const title =
     access.source === "user" ? `${t("keyUsingYours")} (${maskKey(access.key)})`
+    : access.source === "account" ? `${t("keyUsingAccount")} (${access.account.masked})`
     : access.source === "server" ? t("keyUsingServer")
     : t("keyRequired");
   const sub =
     access.source === "none"
       ? access.serverKey ? t("keyLoginOrPaste") : t("keyPasteHint")
-      : t("keyMemoryOnly");
+      : access.source === "account" ? t("keyAccountNote") : t("keyMemoryOnly");
 
   return (
     <>
       <div className="tk-key">
         <i className={`ri-key-2-line tk-chip ${tone}`} style={{ padding: 8, fontSize: "1.1rem" }} aria-hidden="true" />
         <div className="grow"><b>{title}</b><span>{sub}</span></div>
-        {access.key && (
-          <button type="button" className="tk-btn ghost small" onClick={clearGeminiKey}><i className="ri-delete-bin-line" />{t("keyRemove")}</button>
+        {(access.key || access.account.hasKey) && (
+          <button type="button" className="tk-btn ghost small" onClick={removeKey}><i className="ri-delete-bin-line" />{t("keyRemove")}</button>
         )}
         <button type="button" className="tk-btn small" onClick={() => toggle(true)}>
-          <i className="ri-key-line" />{access.key ? t("keyChange") : t("keyAdd")}
+          <i className="ri-key-line" />{access.key || access.account.hasKey ? t("keyChange") : t("keyAdd")}
         </button>
       </div>
-      <GeminiKeyDialog open={open} onClose={() => toggle(false)} />
+      <GeminiKeyDialog open={open} onClose={() => toggle(false)} loggedIn={access.loggedIn} />
     </>
   );
 }
 
-function GeminiKeyDialog({ open, onClose }) {
+function GeminiKeyDialog({ open, onClose, loggedIn }) {
   const { t } = useLanguage();
   const { toast } = useFeedback();
   const [value, setValue] = useState("");
@@ -74,8 +83,13 @@ function GeminiKeyDialog({ open, onClose }) {
     if (!isKeyFormatOk(v)) { setError(t("keyBadFormat")); return; }
     setBusy(true); setError("");
     try {
-      await toolsApi.validateKey(v);
-      setGeminiKey(v, { remember });
+      if (loggedIn) {
+        await saveAccountKey(v); // validated by Google on the server, then stored encrypted in your account
+        clearGeminiKey();
+      } else {
+        await toolsApi.validateKey(v);
+        setGeminiKey(v, { remember });
+      }
       toast.success(t("keySaved"));
       onClose();
     } catch (err) {
@@ -104,9 +118,13 @@ function GeminiKeyDialog({ open, onClose }) {
                 </button>
               </div>
               {error && <div className="tk-alert err" role="alert"><i className="ri-error-warning-line" />{error}</div>}
-              <label className="tk-hint" style={{ display: "flex", gap: 8, alignItems: "center", cursor: "pointer" }}>
-                <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} /> {t("keyRemember")}
-              </label>
+              {loggedIn ? (
+                <p className="tk-hint"><i className="ri-shield-check-line" /> {t("keyAccountNote")}</p>
+              ) : (
+                <label className="tk-hint" style={{ display: "flex", gap: 8, alignItems: "center", cursor: "pointer" }}>
+                  <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} /> {t("keyRemember")}
+                </label>
+              )}
               <a className="tk-hint" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" style={{ color: "var(--primary)" }}>
                 <i className="ri-external-link-line" /> {t("keyGet")}
               </a>

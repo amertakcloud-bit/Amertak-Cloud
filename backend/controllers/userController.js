@@ -1,3 +1,6 @@
+import { AppError } from "../lib/AppError.js";
+import { isValidKeyFormat, validateGeminiKey, mapGeminiError } from "../lib/geminiClient.js";
+import { decryptSecret, encryptSecret } from "../lib/secretBox.js";
 import User from "../models/User.js";
 import { asyncHandler } from "../middleware/errorMiddleware.js";
 
@@ -63,4 +66,36 @@ export const updateMe = asyncHandler(async (req, res) => {
     data: { user: toPublicUser(user) },
     message: "Profile updated.",
   });
+});
+
+// ── Gemini API key stored in the user's account (encrypted) ──
+
+const mask = (k) => (k ? `${k.slice(0, 4)}…${k.slice(-3)}` : "");
+
+// GET /api/users/gemini-key → { hasKey, masked }  (the key itself is never returned)
+export const getGeminiKeyStatus = asyncHandler(async (req, res) => {
+  const u = await User.findById(req.user._id).select("+geminiKeyEnc");
+  const key = decryptSecret(u?.geminiKeyEnc);
+  res.json({ success: true, data: { hasKey: Boolean(key), masked: mask(key) } });
+});
+
+// PUT /api/users/gemini-key  { key } → validates with Google, then stores it encrypted
+export const saveGeminiKey = asyncHandler(async (req, res) => {
+  const key = String(req.body?.key || "").trim();
+  if (!isValidKeyFormat(key)) {
+    throw new AppError(400, "INVALID_API_KEY_FORMAT", "The Gemini API key looks invalid (too short, or it contains spaces).");
+  }
+  try {
+    await validateGeminiKey(key);
+  } catch (err) {
+    throw mapGeminiError(err);
+  }
+  await User.updateOne({ _id: req.user._id }, { $set: { geminiKeyEnc: encryptSecret(key) } });
+  res.json({ success: true, data: { hasKey: true, masked: mask(key) }, message: "Gemini API key saved to your account." });
+});
+
+// DELETE /api/users/gemini-key
+export const deleteGeminiKey = asyncHandler(async (req, res) => {
+  await User.updateOne({ _id: req.user._id }, { $set: { geminiKeyEnc: "" } });
+  res.json({ success: true, data: { hasKey: false, masked: "" }, message: "Gemini API key removed." });
 });

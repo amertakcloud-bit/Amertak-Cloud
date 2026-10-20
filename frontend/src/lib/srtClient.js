@@ -7,7 +7,7 @@ import { toolsApi, withRetry, ApiError } from "../services/toolsApi.js";
 //   POST /api/srt/chunk (sequential, retried) → merge → POST /api/srt/cues
 // Chunking keeps every request under Vercel's 4.5 MB body limit.
 
-export async function transcribeFile(file, { settings, onProgress = () => {}, signal } = {}) {
+export async function transcribeFile(file, { settings, onProgress = () => {}, onCharged = () => {}, signal } = {}) {
   onProgress({ stage: "decode", percent: 2 });
   const { samples, rate, duration } = await decodeToMono16k(file);
   if (signal?.aborted) throw new ApiError("Cancelled", { code: "ABORTED" });
@@ -15,6 +15,12 @@ export async function transcribeFile(file, { settings, onProgress = () => {}, si
   const plan = planChunks(samples, rate);
   if (!plan.length) throw new ApiError("The audio is empty.", { code: "EMPTY_AUDIO" });
 
+  // Tokens are charged when the job starts (after the file decoded fine): ceil(MB × 5).
+  const started = (await toolsApi.srtStart(file.size)).data;
+  onCharged({ cost: started.cost, tokens: started.tokens });
+  const job = started.job;
+  let done = false;
+  try {
   const words = [];
   const segments = [];
   const warnings = [];
@@ -30,7 +36,7 @@ export async function transcribeFile(file, { settings, onProgress = () => {}, si
 
     const wav = sliceToWav(samples, start, end, rate);
     const offset = Number((start / rate).toFixed(3));
-    const res = await withRetry(() => toolsApi.srtChunk(wav, offset, mode, signal), { signal });
+    const res = await withRetry(() => toolsApi.srtChunk(wav, offset, mode, signal, job), { signal });
     const d = res.data;
     if (d.mode === "segment" && mode === "word") mode = "segment";
     if (d.silent) silentChunks++;
@@ -48,7 +54,9 @@ export async function transcribeFile(file, { settings, onProgress = () => {}, si
   if (inSilence > 0) warnings.push(`${inSilence} word(s) were timed inside silent parts of the audio — please review those subtitles.`);
   onProgress({ stage: "done", percent: 100 });
 
+  done = true;
   return {
+    cost: started.cost,
     cues: out.cues,
     timeline: out.timeline,
     timing: out.timing,
@@ -59,4 +67,8 @@ export async function transcribeFile(file, { settings, onProgress = () => {}, si
     warnings: [...warnings, ...(out.warnings || [])],
     settings: out.settings,
   };
+  } finally {
+    // Failed (not cancelled by the user) → give the tokens back, once.
+    if (!done && !signal?.aborted) toolsApi.srtRefund(job).then(() => onCharged({ refunded: true })).catch(() => {});
+  }
 }

@@ -1,3 +1,4 @@
+import { RATES, tokensForBytes, withCharge } from "../lib/billing.js";
 import { Readable } from "node:stream";
 import { AppError } from "../lib/AppError.js";
 import { serverKeyConfigured, getModels } from "../lib/geminiClient.js";
@@ -19,11 +20,13 @@ export const getTools = (req, res) => {
     data: {
       loggedIn: Boolean(req.user),
       limits: { uploadMb: MAX_UPLOAD_MB },
+      rates: { captionPerMB: RATES.captionPerMB, cloudSharePerMB: RATES.cloudSharePerMB },
       tools: {
         qr: { available: true, types: QR_TYPES },
         tts: { available: true, voices: KHMER_VOICES },
         srt: { available: true, model: getModels().transcribe, serverKey: serverKeyConfigured() },
         imagePrompt: { available: true, styles: Object.keys(STYLES), serverKey: serverKeyConfigured() },
+        videoEditor: { available: Boolean(process.env.CLOUD_MONGODB_URI), voices: ["piseth", "sreymom"], captionPerMB: RATES.captionPerMB },
         video: { available: true, providers: ["tiktok", "pinterest", "direct"] },
         audio: { available: true, formats: Object.keys(FORMATS), bitrates: BITRATES, serverMaxMb: MAX_UPLOAD_MB },
       },
@@ -47,13 +50,17 @@ export const createQr = asyncHandler(async (req, res) => {
 // POST /api/image-prompt  multipart: image, style, language
 export const createImagePrompt = asyncHandler(async (req, res) => {
   if (!req.file?.buffer?.length) throw new AppError(400, "NO_FILE", 'Attach an image in the "image" field.');
-  const data = await imageToPrompt({
-    apiKey: req.gemini.key,
-    image: req.file.buffer,
-    style: req.body?.style || "detailed",
-    language: req.body?.language === "km" ? "km" : "en",
-  });
-  res.json({ success: true, data: { ...data, keySource: req.gemini.source } });
+  // Charged when the button is pressed: ceil(MB × 5) whole tokens, refunded if generation fails.
+  const cost = tokensForBytes(req.file.size ?? req.file.buffer.length, RATES.captionPerMB);
+  const { result: data, balance } = await withCharge(req.user._id, cost, () =>
+    imageToPrompt({
+      apiKey: req.gemini.key,
+      image: req.file.buffer,
+      style: req.body?.style || "detailed",
+      language: req.body?.language === "km" ? "km" : "en",
+    })
+  );
+  res.json({ success: true, data: { ...data, keySource: req.gemini.source, cost, tokens: balance } });
 });
 
 // POST /api/video/resolve  { url }

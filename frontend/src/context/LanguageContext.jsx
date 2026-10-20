@@ -1,5 +1,7 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import { en as toolsEn, km as toolsKm } from "../i18n/toolsText";
+import { en as moreEn, km as moreKm } from "../i18n/moreText";
+import { en as homeEn, km as homeKm } from "../i18n/homeText";
 
 // Language
 // All the text strings the app uses, in English and Khmer.
@@ -287,6 +289,10 @@ const translations = {
 // so shared keys (e.g. dSrt, dTts, dExportAudio) get the improved wording.
 translations.en = { ...translations.en, ...toolsEn };
 translations.km = { ...translations.km, ...toolsKm };
+translations.en = { ...translations.en, ...moreEn };
+translations.km = { ...translations.km, ...moreKm };
+translations.en = { ...translations.en, ...homeEn };
+translations.km = { ...translations.km, ...homeKm };
 
 const LanguageContext = createContext(null);
 

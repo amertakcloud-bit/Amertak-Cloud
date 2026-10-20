@@ -20,7 +20,16 @@ export function isCloudShareAvailable() {
 }
 
 let connPromise = null;
+let connection = null;
 let Model = null;
+
+// One cached connection to the CloudShare database (CLOUD_MONGODB_URI), shared by CloudShare
+// and the video-editor projects.
+export async function getCloudConnection() {
+  if (connection && connection.readyState === 1) return connection;
+  await getCloudModel();
+  return connection;
+}
 
 export async function getCloudModel() {
   if (Model && Model.db.readyState === 1) return Model;
@@ -59,6 +68,7 @@ export async function getCloudModel() {
           conn = await mongoose.createConnection(uri, opts).asPromise();
         } else throw err;
       }
+      connection = conn;
       Model = conn.model("CloudFile", fileSchema);
       return Model;
     })().catch((err) => {
@@ -82,6 +92,7 @@ export function getCloudShareConfig() {
     maxFileSizeMB: MAX_MB,
     maxFileSizeBytes: CLOUDSHARE_MAX_BYTES,
     expirationOptions: Object.keys(EXPIRY_OPTIONS),
+    tokensPerMB: 2,
   };
 }
 

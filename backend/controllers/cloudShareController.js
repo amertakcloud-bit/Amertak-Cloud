@@ -1,3 +1,4 @@
+import { RATES, chargeTokens, refundTokens, tokensForBytes } from "../lib/billing.js";
 import { CLOUDSHARE_MAX_BYTES, isCloudShareAvailable, createCloudShareRecord, findCloudShareRecord, getCloudShareConfig, incrementCloudShareDownloadCount, toPublicCloudShareRecord } from "../services/cloudShareService.js";
 
 const MAX_FILE_SIZE = CLOUDSHARE_MAX_BYTES;
@@ -44,6 +45,18 @@ export async function uploadCloudShareFile(req, res) {
     });
   }
 
+  // 2 tokens per MB, rounded UP to whole tokens (5 MB = 10 tokens). Refunded if storing fails.
+  const cost = tokensForBytes(req.file.size, RATES.cloudSharePerMB);
+  let balance;
+  try {
+    balance = await chargeTokens(req.user._id, cost);
+  } catch (err) {
+    return res.status(err.statusCode || 500).json({
+      success: false,
+      error: { code: err.code || "INTERNAL_ERROR", message: err.message },
+    });
+  }
+
   try {
     const record = await createCloudShareRecord({
       originalName: req.file.originalname,
@@ -67,8 +80,11 @@ export async function uploadCloudShareFile(req, res) {
         infoUrl: `${baseUrl}/api/cloudshare/files/${record.shareId}`,
         expiresAt: record.expiresAt || null,
       },
+      cost,
+      tokens: balance,
     });
   } catch (error) {
+    await refundTokens(req.user._id, cost).catch(() => {});
     const code = ["INVALID_EXPIRATION", "STORAGE_UNAVAILABLE"].includes(error.code) ? error.code : "INTERNAL_ERROR";
     return res.status(code === "INVALID_EXPIRATION" ? 400 : code === "STORAGE_UNAVAILABLE" ? 503 : 500).json({
       success: false,

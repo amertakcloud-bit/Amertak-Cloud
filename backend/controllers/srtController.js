@@ -6,6 +6,7 @@ import {
   validateGeminiKey,
   mapGeminiError,
 } from "../lib/geminiClient.js";
+import { RATES, refundJob, startJob, tokensForBytes, verifyJob } from "../lib/billing.js";
 import { asyncHandler } from "../middleware/errorMiddleware.js";
 import { MAX_CHUNK_SECONDS, transcribeChunk } from "../services/srt/chunk.js";
 import { alignTextToWords, buildCues, cleanWords, cuesFromSegments, DEFAULTS, sanitizeSettings } from "../services/srt/subtitles.js";
@@ -24,6 +25,7 @@ export const getStatus = (req, res) => {
       loggedIn: Boolean(req.user),
       chunk: { targetSeconds: 90, maxSeconds: MAX_CHUNK_SECONDS, sampleRate: 16000 },
       defaults: DEFAULTS,
+      rates: { captionPerMB: RATES.captionPerMB },
     },
   });
 };
@@ -42,6 +44,34 @@ export const validateKey = asyncHandler(async (req, res) => {
     throw mapGeminiError(err);
   }
 });
+
+// POST /api/srt/start  { sizeBytes } (login required) — charges ceil(MB × 5) whole tokens and
+// returns a job token that the chunk requests must carry in the x-job header.
+export const startJobHandler = asyncHandler(async (req, res) => {
+  const sizeBytes = Number(req.body?.sizeBytes);
+  if (!Number.isFinite(sizeBytes) || sizeBytes <= 0 || sizeBytes > 4 * 1024 * 1024 * 1024) {
+    throw new AppError(400, "INVALID_SIZE", '"sizeBytes" must be the size of the file in bytes.');
+  }
+  const cost = tokensForBytes(sizeBytes, RATES.captionPerMB);
+  const job = await startJob(req.user._id, "caption", cost);
+  res.json({ success: true, data: { job: job.token, cost: job.cost, tokens: job.balance } });
+});
+
+// POST /api/srt/refund  { job } — gives the tokens back (once) when the whole job failed.
+export const refundJobHandler = asyncHandler(async (req, res) => {
+  const refunded = await refundJob(req.body?.job, req.user._id, "caption");
+  res.json({ success: true, data: { refunded } });
+});
+
+// Chunk requests must belong to a paid job of this user.
+export async function requireJob(req, _res, next) {
+  try {
+    await verifyJob(req.get("x-job"), req.user?._id, "caption");
+    next();
+  } catch (err) {
+    next(err);
+  }
+}
 
 // POST /api/srt/chunk — multipart: audio (16-bit mono WAV), offset, [mode]
 export const transcribeChunkHandler = asyncHandler(async (req, res) => {

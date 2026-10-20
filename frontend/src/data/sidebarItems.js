@@ -27,6 +27,7 @@ const sidebarItems = [
       { labelKey: "Clouds", icon: "ri-cloud-line", path: "/tools/cloud" },
       { labelKey: "VideoDownloader", icon: "ri-download-line", path: "/tools/downloader" },
       { labelKey: "ExportAudio", icon: "ri-voiceprint-line", path: "/tools/export-audio" },
+      { labelKey: "VideoEditor", icon: "ri-movie-2-line", path: "/tools/video-editor" },
       { labelKey: "Srt", icon: "ri-closed-captioning-line", path: "/tools/srt" },
       { labelKey: "ImageToPrompt", icon: "ri-image-ai-line", path: "/tools/image-prompt" },
       { labelKey: "TextToSpeech", icon: "ri-text-to-speech-line", path: "/tools/tts" },

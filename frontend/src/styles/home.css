@@ -117,3 +117,10 @@
         justify-content: center;
     }
 }
+/* Home: features + terms */
+.home-h3 { font-family: Kantumruy, system-ui, sans-serif; color: var(--primary); margin: 28px 0 12px; }
+.home-list { margin: 8px 0 0; padding-left: 1.1rem; display: grid; gap: 6px; color: var(--text-muted); line-height: 1.55; }
+.home-list li { list-style: disc; }
+.home-try { display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; color: var(--primary); font-weight: 600; text-decoration: none; }
+.home-terms-intro { color: var(--text-muted); max-width: 70ch; line-height: 1.6; margin-bottom: 14px; }
+.home-muted { display: block; font-size: .85rem; opacity: .8; margin-top: 4px; }

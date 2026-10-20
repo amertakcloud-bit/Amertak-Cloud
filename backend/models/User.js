@@ -56,6 +56,8 @@ const userSchema = new mongoose.Schema(
       enum: ["user", "admin"],
       default: "user",
     },
+    // The user's own Gemini API key, AES-256-GCM encrypted (never returned to the client).
+    geminiKeyEnc: { type: String, default: "", select: false },
     // Token balance credited by successful plan payments.
     tokens: {
       type: Number,

@@ -57,6 +57,9 @@ export function resolveGeminiKey(req) {
     return { key: userKey, source: "user" };
   }
 
+  // The key the user saved in their account (set by the key middleware after decrypting).
+  if (req.savedGeminiKey) return { key: req.savedGeminiKey, source: "account" };
+
   const serverKey = (process.env.GEMINI_API_KEY || "").trim();
   if (!serverKey) {
     throw new AppError(

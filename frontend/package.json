@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test tests/lib.test.mjs"
+    "test": "node --test tests/lib.test.mjs tests/editor.test.mjs"
   },
   "dependencies": {
     "aos": "^2.3.4",

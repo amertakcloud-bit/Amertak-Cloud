@@ -9,6 +9,9 @@ import {
 
 import { CLOUDSHARE_MAX_BYTES } from "../services/cloudShareService.js";
 
+import { protect } from "../middleware/authMiddleware.js";
+import { dbReady } from "../middleware/dbReady.js";
+
 const router = Router();
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -18,7 +21,7 @@ const upload = multer({
 });
 
 router.get("/config", getCloudShareConfigHandler);
-router.post("/upload", upload.single("file"), uploadCloudShareFile);
+router.post("/upload", dbReady, protect, upload.single("file"), uploadCloudShareFile);
 router.get("/files/:shareId", getCloudShareFileInfo);
 router.get("/files/:shareId/download", downloadCloudShareFile);
 

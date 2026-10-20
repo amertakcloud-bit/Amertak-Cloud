@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { optionalAuth } from "../middleware/optionalAuth.js";
 import { requireGeminiKey } from "../middleware/geminiKey.js";
+import { protect } from "../middleware/authMiddleware.js";
+import { dbReady } from "../middleware/dbReady.js";
 import { srtLimiter } from "../middleware/rateLimiters.js";
 import { uploadAudioChunk } from "../middleware/uploads.js";
 import {
@@ -8,6 +10,9 @@ import {
   buildCuesHandler,
   exportSrt,
   getStatus,
+  refundJobHandler,
+  requireJob,
+  startJobHandler,
   transcribeChunkHandler,
   validateKey,
 } from "../controllers/srtController.js";
@@ -16,7 +21,9 @@ const router = Router();
 
 router.get("/status", optionalAuth, getStatus);
 router.post("/validate-key", srtLimiter, validateKey);
-router.post("/chunk", srtLimiter, optionalAuth, requireGeminiKey, uploadAudioChunk, transcribeChunkHandler);
+router.post("/start", srtLimiter, dbReady, protect, startJobHandler);
+router.post("/refund", srtLimiter, dbReady, protect, refundJobHandler);
+router.post("/chunk", srtLimiter, dbReady, protect, requireJob, requireGeminiKey, uploadAudioChunk, transcribeChunkHandler);
 router.post("/cues", srtLimiter, buildCuesHandler);
 router.post("/align", srtLimiter, alignHandler);
 router.post("/export", srtLimiter, exportSrt);

@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { API_URL } from "../../services/api";
+import { API_URL, getToken } from "../../services/api";
+import { useAuth } from "../../context/AuthContext";
+import TokenCost from "../../components/tools/TokenCost";
+import { RATES, tokensForBytes } from "../../lib/tokens";
 import { useFeedback } from "../../components/ui/Feedback";
 import { useLanguage } from "../../context/LanguageContext";
 
@@ -16,6 +19,7 @@ const fmtSize = (b) =>
 export default function CloudShare() {
   const { toast } = useFeedback();
   const { t } = useLanguage();
+  const { user, refreshUser } = useAuth();
   const [cfg, setCfg] = useState({ available: true, maxFileSizeMB: 4 });
   const [file, setFile] = useState(null);
   const [expiresIn, setExpiresIn] = useState("never");
@@ -55,6 +59,8 @@ export default function CloudShare() {
   const upload = () => {
     if (!file) return toast.info(t("csChooseFile"));
     if (!cfg.available) return toast.error(t("csUnavailable"));
+    if (!user) return toast.info(t("tokLogin"));
+    if (tokensForBytes(file.size, RATES.cloudSharePerMB) > Number(user.tokens ?? 0)) return toast.error(t("err_INSUFFICIENT_TOKENS"));
     const fd = new FormData();
     fd.append("file", file);
     fd.append("expiresIn", expiresIn);
@@ -62,6 +68,7 @@ export default function CloudShare() {
     xhrRef.current = xhr;
     xhr.open("POST", `${API_URL}/cloudshare/upload`);
     xhr.withCredentials = true;
+    if (getToken()) xhr.setRequestHeader("Authorization", `Bearer ${getToken()}`);
     xhr.upload.onprogress = (e) => e.lengthComputable && setProgress(Math.round((e.loaded / e.total) * 100));
     xhr.onload = () => {
       let p = {};
@@ -70,6 +77,8 @@ export default function CloudShare() {
         setLink(p.file.downloadUrl || p.file.url);
         setProgress(100);
         setView("success");
+        refreshUser();
+        if (p.cost) toast.success(t("tokCharged").replace("{n}", String(p.cost)));
         return;
       }
       fail(xhr.status === 413 ? t("csTooLarge") : p?.error?.message || p?.message || t("csBadResponse"));
@@ -152,7 +161,8 @@ export default function CloudShare() {
               </select>
             </div>
             <p className="cs-muted cs-note">{t("csMax")}: {cfg.maxFileSizeMB} MB</p>
-            <button type="button" className="cs-btn cs-btn-primary cs-block" onClick={upload} disabled={!file || !cfg.available}>
+            <TokenCost bytes={file?.size} perMB={RATES.cloudSharePerMB} />
+            <button type="button" className="cs-btn cs-btn-primary cs-block" onClick={upload} disabled={!file || !cfg.available || !user}>
               <i className="ri-upload-2-line" /> {t("csUpload")}
             </button>
           </div>

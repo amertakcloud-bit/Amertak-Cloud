@@ -13,6 +13,8 @@ export function splitWords(s) {
 export const SENTENCE_END = /[។៕?!؟.…]$/;
 const KHMER = /[ក-៿]/;
 const WORDLIKE = /[\p{L}\p{N}]/u;
+// Chinese/Japanese are written without spaces too.
+const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u;
 
 // Khmer is written without spaces; Latin words/numbers need one.
 export function joinWords(parts) {
@@ -23,7 +25,7 @@ export function joinWords(parts) {
     if (out) {
       const prev = out[out.length - 1];
       const next = w[0];
-      if (WORDLIKE.test(prev) && WORDLIKE.test(next) && !KHMER.test(prev) && !KHMER.test(next)) out += " ";
+      if (WORDLIKE.test(prev) && WORDLIKE.test(next) && !KHMER.test(prev) && !KHMER.test(next) && !CJK.test(prev) && !CJK.test(next)) out += " ";
     }
     out += w;
   }

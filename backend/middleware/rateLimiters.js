@@ -19,4 +19,4 @@ export const srtLimiter = limiter({ windowMs: TEN_MIN, limit: 240, message: "Too
 export const aiLimiter = limiter({ windowMs: TEN_MIN, limit: 40, message: "Too many AI requests. Please wait a few minutes." });
 export const lightLimiter = limiter({ windowMs: TEN_MIN, limit: 200, message: "Too many requests. Please slow down." });
 export const downloadLimiter = limiter({ windowMs: TEN_MIN, limit: 60, message: "Too many download requests. Please wait a few minutes." });
-export const ttsLimiter = limiter({ windowMs: TEN_MIN, limit: 60, message: "Too many voice requests. Please wait a few minutes." });
+export const ttsLimiter = limiter({ windowMs: TEN_MIN, limit: 300, message: "Too many voice requests. Please wait a few minutes." });

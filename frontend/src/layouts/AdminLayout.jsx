@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
@@ -85,7 +85,9 @@ function AdminLayout() {
         </div>
 
         <main className="page-content">
-          <Outlet />
+          <Suspense fallback={<div className="tk-empty" style={{ minHeight: 240 }}><i className="ri-loader-4-line spin" /></div>}>
+            <Outlet />
+          </Suspense>
         </main>
 
         <Footer />

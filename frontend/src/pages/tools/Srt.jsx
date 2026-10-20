@@ -2,6 +2,9 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ToolShell from "../../components/tools/ToolShell";
 import Dropzone from "../../components/tools/Dropzone";
 import Waveform from "../../components/tools/Waveform";
+import TokenCost from "../../components/tools/TokenCost";
+import { RATES, tokensForBytes } from "../../lib/tokens";
+import { useAuth } from "../../context/AuthContext";
 import GeminiKeyPanel, { useGeminiAccess } from "../../components/tools/GeminiKey";
 import { useLanguage } from "../../context/LanguageContext";
 import { useFeedback } from "../../components/ui/Feedback";
@@ -67,6 +70,7 @@ export default function Srt() {
   const { toast, confirm } = useFeedback();
   const { data: status } = useToolsStatus();
   const access = useGeminiAccess(status);
+  const { user, refreshUser } = useAuth();
 
   const [file, setFile] = useState(null);
   const [settings, setSettings] = useState(DEFAULTS);
@@ -107,14 +111,16 @@ export default function Srt() {
 
   async function generate() {
     if (!file || busy) return;
+    if (!user) { toast.info(t("tokLogin")); return; }
     if (!access.ready) { toast.info(t("keyRequired")); return; }
+    if (tokensForBytes(file.size, RATES.captionPerMB) > Number(user.tokens ?? 0)) { toast.error(t("err_INSUFFICIENT_TOKENS")); return; }
     setBusy(true); setError(""); setResult(null); setCues([]); setProgress({ stage: "decode", percent: 2 });
     abort.current = new AbortController();
     try {
-      const r = await transcribeFile(file, { settings, onProgress: setProgress, signal: abort.current.signal });
+      const r = await transcribeFile(file, { settings, onProgress: setProgress, onCharged: () => refreshUser(), signal: abort.current.signal });
       setResult(r);
       setCues(withIds(r.cues));
-      toast.success(t("srtDone").replace("{n}", String(r.cues.length)));
+      toast.success(t("srtDone").replace("{n}", String(r.cues.length)) + " " + t("tokCharged").replace("{n}", String(r.cost)));
     } catch (e) {
       if (e.code === "ABORTED") toast.info(t("cancelled"));
       else { const m = friendlyError(e, t); setError(m); toast.error(m); }
@@ -202,12 +208,13 @@ export default function Srt() {
         </details>
 
         <div className="tk-row">
-          <button type="button" className="tk-btn" disabled={!file || busy || !access.ready} onClick={generate}>
+          <button type="button" className="tk-btn" disabled={!file || busy || !access.ready || !user} onClick={generate}>
             <i className={busy ? "ri-loader-4-line spin" : "ri-sparkling-2-line"} />{busy ? t("srtWorking") : t("srtGenerate")}
           </button>
           {busy && <button type="button" className="tk-btn ghost" onClick={() => abort.current?.abort()}><i className="ri-stop-circle-line" />{t("cancel")}</button>}
           {file && !busy && <span className="tk-hint">{formatBytes(file.size)}</span>}
         </div>
+        <TokenCost bytes={file?.size} perMB={RATES.captionPerMB} />
 
         {busy && progress && (
           <div aria-live="polite">

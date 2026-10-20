@@ -39,77 +39,73 @@ export default function TextToSpeech() {
   const waveformRef = useRef(null);
   const waveSurferRef = useRef(null);
 
+  const speedRef = useRef(speed);
+  speedRef.current = speed;
+
+  // The waveform container only exists once there is audio, so the player is created the
+  // first time audioUrl is set (creating it on mount found no container → Play stayed
+  // disabled after the very first generation).
   useEffect(() => {
-    if (!waveformRef.current) return undefined;
-
-    const wavesurfer = WaveSurfer.create({
-      container: waveformRef.current,
-      waveColor: "var(--primary-soft)",
-      progressColor: "var(--primary-hover",
-      cursorColor: "var(--primary)",
-      cursorWidth: 2,
-      barWidth: 2,
-      barGap: 1.5,
-      barRadius: 2,
-      height: 64,
-      normalize: true,
-      interact: true,
-      backend: "WebAudio",
-    });
-
-    waveSurferRef.current = wavesurfer;
-
-    wavesurfer.on("ready", () => {
-      setIsReady(true);
-      setDuration(wavesurfer.getDuration());
-      setCurrentTime(0);
-      wavesurfer.setPlaybackRate(speed);
-    });
-
-    wavesurfer.on("timeupdate", (time) => {
-      setCurrentTime(time);
-    });
-
-    wavesurfer.on("play", () => setIsPlaying(true));
-    wavesurfer.on("pause", () => setIsPlaying(false));
-    wavesurfer.on("finish", () => {
-      setIsPlaying(false);
-      setCurrentTime(wavesurfer.getDuration());
-    });
-
-    return () => {
-      wavesurfer.destroy();
-      waveSurferRef.current = null;
-    };
-  }, [speed]);
-
-  useEffect(() => {
-    const wavesurfer = waveSurferRef.current;
-    if (wavesurfer) {
-      wavesurfer.setPlaybackRate(speed);
-    }
-  }, [speed]);
-
-  useEffect(() => {
-    return () => {
-      if (audioUrl) {
-        URL.revokeObjectURL(audioUrl);
-      }
-    };
-  }, [audioUrl]);
-
-  useEffect(() => {
-    const wavesurfer = waveSurferRef.current;
-    if (!wavesurfer || !audioUrl) {
+    if (!audioUrl || !waveformRef.current) {
       setIsReady(false);
       setDuration(0);
       setCurrentTime(0);
       return;
     }
 
-    wavesurfer.load(audioUrl);
+    let wavesurfer = waveSurferRef.current;
+    if (!wavesurfer) {
+      const css = getComputedStyle(document.documentElement);
+      const color = (name, fallback) => css.getPropertyValue(name).trim() || fallback;
+      wavesurfer = WaveSurfer.create({
+        container: waveformRef.current,
+        waveColor: color("--primary-soft", "rgba(139,92,246,.35)"),
+        progressColor: color("--primary", "#8b5cf6"),
+        cursorColor: color("--primary", "#8b5cf6"),
+        cursorWidth: 2,
+        barWidth: 2,
+        barGap: 1.5,
+        barRadius: 2,
+        height: 64,
+        normalize: true,
+        interact: true,
+      });
+      waveSurferRef.current = wavesurfer;
+      wavesurfer.on("ready", () => {
+        setIsReady(true);
+        setDuration(wavesurfer.getDuration());
+        setCurrentTime(0);
+        wavesurfer.setPlaybackRate(speedRef.current);
+      });
+      wavesurfer.on("timeupdate", (time) => setCurrentTime(time));
+      wavesurfer.on("play", () => setIsPlaying(true));
+      wavesurfer.on("pause", () => setIsPlaying(false));
+      wavesurfer.on("finish", () => {
+        setIsPlaying(false);
+        setCurrentTime(wavesurfer.getDuration());
+      });
+      wavesurfer.on("error", () => toast.error(t("err_UNKNOWN")));
+    }
+
     setIsReady(false);
+    setIsPlaying(false);
     setCurrentTime(0);
+    wavesurfer.load(audioUrl);
+  }, [audioUrl]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    waveSurferRef.current?.setPlaybackRate(speed);
+  }, [speed]);
+
+  useEffect(() => () => {
+    try { waveSurferRef.current?.destroy(); } catch { /* already gone */ }
+    waveSurferRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (audioUrl) URL.revokeObjectURL(audioUrl);
+    };
   }, [audioUrl]);
 
   const handleGenerate = async (event) => {
@@ -128,10 +124,6 @@ export default function TextToSpeech() {
     try {
       const { blob } = await toolsApi.tts({ text: trimmedText, voice });
       const nextAudioUrl = URL.createObjectURL(blob);
-
-      if (audioUrl) {
-        URL.revokeObjectURL(audioUrl);
-      }
 
       setAudioUrl(nextAudioUrl);
       setError("");

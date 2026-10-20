@@ -12,7 +12,7 @@ export class ApiError extends Error {
   }
 }
 
-async function request(path, { method = "GET", json, form, headers = {}, blob = false, signal, params, withKey = false } = {}) {
+async function request(path, { method = "GET", json, form, headers = {}, blob = false, signal, params, withKey = false, job = "" } = {}) {
   const qs = params ? `?${new URLSearchParams(Object.entries(params).filter(([, v]) => v !== undefined && v !== ""))}` : "";
   let res;
   try {
@@ -24,6 +24,7 @@ async function request(path, { method = "GET", json, form, headers = {}, blob = 
         ...(json !== undefined ? { "Content-Type": "application/json" } : {}),
         ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
         ...(withKey ? geminiHeaders() : {}),
+        ...(job ? { "x-job": job } : {}),
         ...headers,
       },
       body: json !== undefined ? JSON.stringify(json) : form,
@@ -70,12 +71,14 @@ export const toolsApi = {
   // ── SRT
   srtStatus: () => request("/srt/status"),
   validateKey: (key) => request("/srt/validate-key", { method: "POST", headers: { "x-gemini-api-key": key } }),
-  srtChunk: (wavBlob, offset, mode, signal) => {
+  srtStart: (sizeBytes) => request("/srt/start", { method: "POST", json: { sizeBytes } }),
+  srtRefund: (job) => request("/srt/refund", { method: "POST", json: { job } }),
+  srtChunk: (wavBlob, offset, mode, signal, job) => {
     const form = new FormData();
     form.append("audio", wavBlob, "chunk.wav");
     form.append("offset", String(offset));
     if (mode) form.append("mode", mode);
-    return request("/srt/chunk", { method: "POST", form, withKey: true, signal });
+    return request("/srt/chunk", { method: "POST", form, withKey: true, signal, job });
   },
   srtCues: (body, signal) => request("/srt/cues", { method: "POST", json: body, signal }),
   srtAlign: (body) => request("/srt/align", { method: "POST", json: body }),
@@ -96,6 +99,9 @@ export const toolsApi = {
     form.append("language", language);
     return request("/image-prompt", { method: "POST", form, withKey: true, signal });
   },
+
+  // ── Video editor
+  editorTranslate: (lines, from, signal) => request("/editor/translate", { method: "POST", json: { lines, from }, withKey: true, signal }),
 
   // ── Video downloader
   videoResolve: (url, signal) => request("/video/resolve", { method: "POST", json: { url }, signal }),

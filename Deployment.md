@@ -148,6 +148,13 @@ Google Cloud Console → Credentials → OAuth client → **Authorized redirect 
 
 ---
 
+## ✨ មុខងារថ្មី (Token, Gemini key ក្នុងគណនី, Video Editor)
+
+- **Token**: Caption (SRT) និង Image→Prompt = **5 token / 1 MB**, CloudShare = **2 token / 1 MB**។ តែងតែបង្គត់ឡើងជាចំនួនគត់ (ឧ. 10.6 → 11)។ ត្រូវ login; បើបរាជ័យ token ត្រូវបានសងវិញ។
+- **Gemini key ក្នុងគណនី**: user រក្សាទុក key ក្នុង Settings ក្រុម Tools (ប៊ូតុង Add key) → រក្សាទុកដោយ AES-256-GCM ក្នុង MongoDB (`MONGODB_URI`)។ ប្រើ `SESSION_SECRET` ជា secret (ឬ `KEY_ENCRYPTION_SECRET`)។ **ប្រសិនបើប្តូរ SESSION_SECRET** key ដែលបានរក្សាទុកនឹងអានមិនបាន (user ត្រូវដាក់ម្តងទៀត)។
+- **Video Editor** (`/tools/video-editor`): project JSON ក្នុង `CLOUD_MONGODB_URI` (collection `editorprojects`); ឯកសារវីដេអូ/សម្លេង/រូបភាពនៅក្នុង browser (IndexedDB) ព្រោះ Vercel កំណត់ 4.5 MB។ Export ជា real-time ក្នុង browser (mp4/webm)។
+- Model បម្លែងសម្លេង: `GEMINI_TRANSCRIBE_MODEL=gemini-3.5-transcribe` (មាន word timestamp ហើយគាំទ្រខ្មែរ/ចិន/អង់គ្លេស)។ Free tier របស់ Google មានដែនកំណត់ — ដាក់ key ដែលបើក billing ដើម្បីកុំឱ្យជាប់ limit។
+
 ## 6. ដែនកំណត់របស់ Vercel ដែលអ្នកគួរដឹង
 
 | ប្រធានបទ | អ្វីដែលកើតឡើង |
