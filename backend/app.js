@@ -22,9 +22,11 @@ import { notFound, errorHandler, asyncHandler } from "./middleware/errorMiddlewa
 // Vercel serverless function (api/index.js).
 
 export function allowedOrigins() {
-  const fromEnv = String(process.env.CLIENT_URL || "")
+  const fromEnv = [process.env.CLIENT_URL, process.env.ALLOWED_ORIGINS]
+    .filter(Boolean)
+    .join(",")
     .split(",")
-    .map((s) => s.trim().replace(/\/+$/, ""))
+    .map((s) => s.trim().replace(/^["']|["']$/g, "").replace(/\/+$/, ""))
     .filter(Boolean);
   const dev = process.env.NODE_ENV === "production" ? [] : ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:4173"];
   return [...new Set([...fromEnv, ...dev])];
@@ -46,7 +48,7 @@ const dbReady = asyncHandler(async (_req, _res, next) => {
 
 export function createApp() {
   const app = express();
-  app.set("trust proxy", 1);
+  app.set("trust proxy", Number(process.env.TRUST_PROXY_HOPS || 1)); // 2 when the frontend proxies /api (Deployment.md)
   app.disable("x-powered-by");
 
   const origins = allowedOrigins();
@@ -54,6 +56,7 @@ export function createApp() {
     cors({
       origin(origin, cb) {
         if (!origin || origins.includes(origin)) return cb(null, true);
+        console.warn(`[CORS] blocked origin ${origin}. Allowed: ${origins.join(", ") || "(none — set CLIENT_URL)"}`);
         return cb(null, false); // no CORS headers → the browser blocks it (no 500)
       },
       credentials: true,
@@ -70,8 +73,19 @@ export function createApp() {
   configurePassport();
   app.use(passport.initialize());
 
-  app.get("/api/health", (_req, res) => {
-    res.json({ success: true, status: "ok", time: new Date().toISOString(), database: hasDatabase() });
+  // Diagnostics: call with an Origin header to check CORS, e.g.
+  //   curl -H "Origin: https://YOUR-FRONTEND.vercel.app" https://YOUR-BACKEND.vercel.app/api/health
+  app.get("/api/health", (req, res) => {
+    const origin = req.get("origin") || null;
+    res.json({
+      success: true,
+      status: "ok",
+      time: new Date().toISOString(),
+      database: hasDatabase(),
+      production: process.env.NODE_ENV === "production",
+      cors: { requestOrigin: origin, allowed: origin ? origins.includes(origin) : null, allowedOrigins: origins },
+      google: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
+    });
   });
 
   // Public tool APIs (no database needed)

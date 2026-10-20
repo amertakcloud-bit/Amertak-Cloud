@@ -64,7 +64,6 @@ function Payment({
 
   const dialog = useRef(null);
   const openRef = useRef(open);
-  const [rendered, setRendered] = useState(false);
   const [visible, setVisible] = useState(false);
   const created = useRef(false); // guards against duplicate POST (StrictMode)
   const mounted = useRef(true);
@@ -275,10 +274,11 @@ function Payment({
     let raf = 0;
     let timer = 0;
     if (open) {
-      setRendered(true);
+      const d = dialog.current;
+      if (d && !d.open) {
+        try { d.showModal(); } catch { d.setAttribute("open", ""); }
+      }
       raf = requestAnimationFrame(() => {
-        const d = dialog.current;
-        if (d && !d.open) d.showModal();
         raf = requestAnimationFrame(() => setVisible(true)); // next frame → transition runs
       });
       startPayment();
@@ -288,7 +288,6 @@ function Payment({
       timer = window.setTimeout(() => {
         const d = dialog.current;
         if (d && d.open) d.close();
-        setRendered(false);
       }, 260);
     }
     return () => {
@@ -306,7 +305,7 @@ function Payment({
 
   return (
     <>
-      {rendered && (
+      {(
         <dialog
           className="qr-dialog"
           data-state={visible ? "open" : "closed"}

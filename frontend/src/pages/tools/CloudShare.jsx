@@ -3,424 +3,193 @@ import { API_URL } from "../../services/api";
 import { useFeedback } from "../../components/ui/Feedback";
 import { useLanguage } from "../../context/LanguageContext";
 
-const EXPIRATION_OPTIONS = [
-  { value: "never", label: "Never" },
-  { value: "1h", label: "In 1 hour" },
-  { value: "1d", label: "In 1 day" },
-  { value: "7d", label: "In 7 days" },
+const EXPIRY = [
+  ["never", "csNever"],
+  ["1h", "cs1h"],
+  ["1d", "cs1d"],
+  ["7d", "cs7d"],
 ];
+
+const fmtSize = (b) =>
+  b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`;
 
 export default function CloudShare() {
   const { toast } = useFeedback();
   const { t } = useLanguage();
-  const [available, setAvailable] = useState(true);
+  const [cfg, setCfg] = useState({ available: true, maxFileSizeMB: 4 });
+  const [file, setFile] = useState(null);
+  const [expiresIn, setExpiresIn] = useState("never");
+  const [view, setView] = useState("select"); // select | uploading | success | error
+  const [progress, setProgress] = useState(0);
+  const [error, setError] = useState("");
+  const [link, setLink] = useState("");
+  const [drag, setDrag] = useState(false);
+  const input = useRef(null);
+  const xhrRef = useRef(null);
 
-  // Ask the server whether file storage exists on this deployment (it does not on Vercel).
   useEffect(() => {
     fetch(`${API_URL}/cloudshare/config`, { credentials: "include" })
       .then((r) => r.json())
-      .then((d) => setAvailable(d?.config?.available !== false))
+      .then((d) => d?.config && setCfg((c) => ({ ...c, ...d.config })))
       .catch(() => {});
   }, []);
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [expiresIn, setExpiresIn] = useState("never");
-  const [view, setView] = useState("select");
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [errorMessage, setErrorMessage] = useState("");
-  const [shareLink, setShareLink] = useState("");
-  const fileInputRef = useRef(null);
 
-  const updateSelectedFile = (file) => {
-    setSelectedFile(file);
-    setErrorMessage("");
+  const maxBytes = (cfg.maxFileSizeMB || 4) * 1024 * 1024;
+
+  const pick = (f) => {
+    if (!f) return;
+    if (f.size > maxBytes) {
+      toast.error(`${t("csTooLarge")} (${cfg.maxFileSizeMB} MB)`);
+      return;
+    }
+    setFile(f);
+    setError("");
   };
 
-  const handleUpload = () => {
-    if (!selectedFile) {
-      toast.info(t("csChooseFile"));
-      return;
-    }
-    if (!available) {
-      toast.error(t("csUnavailable"));
-      return;
-    }
+  const fail = (m) => {
+    setError(m);
+    setView("error");
+    toast.error(m);
+  };
 
-    const formData = new FormData();
-    formData.append("file", selectedFile);
-    if (expiresIn && expiresIn !== "never") {
-      formData.append("expiresIn", expiresIn);
-    }
-
+  const upload = () => {
+    if (!file) return toast.info(t("csChooseFile"));
+    if (!cfg.available) return toast.error(t("csUnavailable"));
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("expiresIn", expiresIn);
     const xhr = new XMLHttpRequest();
+    xhrRef.current = xhr;
     xhr.open("POST", `${API_URL}/cloudshare/upload`);
     xhr.withCredentials = true;
-
-    xhr.upload.onprogress = (event) => {
-      if (!event.lengthComputable) return;
-      const percent = Math.round((event.loaded / event.total) * 100);
-      setUploadProgress(percent);
-    };
-
+    xhr.upload.onprogress = (e) => e.lengthComputable && setProgress(Math.round((e.loaded / e.total) * 100));
     xhr.onload = () => {
-      try {
-        const payload = JSON.parse(xhr.responseText || "{}");
-
-        if (xhr.status >= 200 && xhr.status < 300) {
-          const nextLink =
-            payload?.file?.downloadUrl || payload?.file?.url || "";
-          setShareLink(nextLink);
-          setView("success");
-          setErrorMessage("");
-          setUploadProgress(100);
-          return;
-        }
-
-        const message =
-          xhr.status === 413
-            ? t("csTooLarge")
-            : payload?.error?.message || payload?.message || "Upload failed. Please try again.";
-        setErrorMessage(message);
-        setView("error");
-        toast.error(message);
-      } catch {
-        const message = xhr.status === 413 ? t("csTooLarge") : t("csBadResponse");
-        setErrorMessage(message);
-        setView("error");
-        toast.error(message);
+      let p = {};
+      try { p = JSON.parse(xhr.responseText || "{}"); } catch { /* handled below */ }
+      if (xhr.status >= 200 && xhr.status < 300 && (p?.file?.downloadUrl || p?.file?.url)) {
+        setLink(p.file.downloadUrl || p.file.url);
+        setProgress(100);
+        setView("success");
+        return;
       }
+      fail(xhr.status === 413 ? t("csTooLarge") : p?.error?.message || p?.message || t("csBadResponse"));
     };
-
-    xhr.onerror = () => {
-      const message = t("err_NETWORK");
-      setErrorMessage(message);
-      setView("error");
-      toast.error(message);
-    };
-
-    setUploadProgress(0);
-    setErrorMessage("");
+    xhr.onerror = () => fail(t("err_NETWORK"));
+    xhr.onabort = () => {};
+    setProgress(0);
     setView("uploading");
-    xhr.send(formData);
+    xhr.send(fd);
   };
 
-  const handleBrowse = () => fileInputRef.current?.click();
-
-  const handleCopy = async () => {
-    if (!shareLink) return;
-
-    try {
-      await navigator.clipboard.writeText(shareLink);
-      toast.success(t("copied"));
-    } catch {
-      const field = document.getElementById("share-link");
-      if (field) {
-        field.select();
-        document.execCommand("copy");
-        toast.success(t("copied"));
-      }
-    }
-  };
-
-  const resetUpload = () => {
-    setSelectedFile(null);
-    setShareLink("");
-    setUploadProgress(0);
-    setErrorMessage("");
+  const reset = () => {
+    xhrRef.current?.abort();
+    setFile(null);
+    setLink("");
+    setProgress(0);
+    setError("");
     setView("select");
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
+    if (input.current) input.current.value = "";
   };
 
-  const handleDrop = (event) => {
-    event.preventDefault();
-    const file = event.dataTransfer?.files?.[0];
-    if (file) {
-      updateSelectedFile(file);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(link);
+    } catch {
+      const el = document.getElementById("cs-link");
+      el?.select();
+      document.execCommand("copy");
     }
-  };
-
-  const handleDragOver = (event) => {
-    event.preventDefault();
+    toast.success(t("copied"));
   };
 
   return (
-    <div className="page">
-      <h1 className="page-heading" style={{ marginBottom: 8 }}>
-        Cloud Share
-      </h1>
-      <p className="page-subtitle" style={{ maxWidth: 620, marginBottom: 24 }}>
-        Upload a file, get a share link, and send it anywhere.
-      </p>
+    <div className="page cs-page">
+      <h1 className="page-heading" style={{ marginBottom: 8 }}>{t("csTitle")}</h1>
+      <p className="page-subtitle" style={{ maxWidth: 620, marginBottom: 20 }}>{t("csSub")}</p>
 
-      {!available && (
+      {!cfg.available && (
         <div className="tk-alert err" role="alert" style={{ marginBottom: 16 }}>
-          <i className="ri-error-warning-line" />
-          {t("csUnavailable")}
+          <i className="ri-error-warning-line" /> {t("csUnavailable")}
         </div>
       )}
 
-      <main className="cloud-container">
-        <section className="hero">
-          <h1 className="grad">Share files simply.</h1>
-          <p className="subtitle">
-            Upload a file, generate a link, and share it in seconds.
-          </p>
-        </section>
-
-        <section className="card">
-          {view === "select" && (
-            <div className="left">
-              <div id="view-select">
-                <div
-                  className="dropzone"
-                  onClick={handleBrowse}
-                  onDragOver={handleDragOver}
-                  onDragEnter={handleDragOver}
-                  onDrop={handleDrop}
-                >
-                  <svg
-                    className="dz-icon"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M12 16V4m0 0L7 9m5-5 5 5" />
-                    <path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" />
-                  </svg>
-                  <p className="dz-title">
-                    {selectedFile ? selectedFile.name : "Drag & Drop your file"}
-                  </p>
-                  <p className="dz-or">or</p>
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={handleBrowse}
-                  >
-                    Browse files
+      <section className="cs-card" aria-live="polite">
+        {view === "select" && (
+          <div className="cs-step">
+            <div
+              className={`cs-drop${drag ? " is-drag" : ""}${file ? " has-file" : ""}`}
+              onClick={() => input.current?.click()}
+              onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
+              onDragLeave={() => setDrag(false)}
+              onDrop={(e) => { e.preventDefault(); setDrag(false); pick(e.dataTransfer?.files?.[0]); }}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && input.current?.click()}
+            >
+              <i className={file ? "ri-file-3-line" : "ri-upload-cloud-2-line"} aria-hidden="true" />
+              {file ? (
+                <>
+                  <p className="cs-fname">{file.name}</p>
+                  <p className="cs-muted">{fmtSize(file.size)}</p>
+                  <button type="button" className="cs-link-btn" onClick={(e) => { e.stopPropagation(); setFile(null); if (input.current) input.current.value = ""; }}>
+                    {t("csRemove")}
                   </button>
-                </div>
-
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  className="visually-hidden"
-                  tabIndex="-1"
-                  aria-label="Choose a file to upload"
-                  onChange={(event) =>
-                    updateSelectedFile(event.target.files?.[0] || null)
-                  }
-                />
-
-                <div className="options">
-                  <label htmlFor="expires">Link expires</label>
-                  <select
-                    id="expires"
-                    value={expiresIn}
-                    onChange={(event) => setExpiresIn(event.target.value)}
-                  >
-                    {EXPIRATION_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <p className="note">
-                Maximum file size:{" "}
-                <span id="max-size">
-                  {Number(import.meta.env.VITE_CLOUD_MAX_SIZE || 100)} MB
-                </span>
-              </p>
-
-              <div className="center" style={{ marginTop: 16 }}>
-                <button
-                  type="button"
-                  className="btn btn-primary btn-block upload-btn"
-                  onClick={handleUpload}
-                  disabled={!selectedFile}
-                  style={{
-                    opacity: selectedFile ? 1 : 0.6,
-                    cursor: selectedFile ? "pointer" : "not-allowed",
-                  }}
-                >
-                  Upload file
-                </button>
-              </div>
+                </>
+              ) : (
+                <>
+                  <p className="cs-title">{t("csDrop")}</p>
+                  <p className="cs-muted">{t("csOr")}</p>
+                  <span className="cs-btn cs-btn-ghost">{t("csBrowse")}</span>
+                </>
+              )}
             </div>
-          )}
+            <input ref={input} type="file" hidden aria-label={t("csBrowse")} onChange={(e) => pick(e.target.files?.[0])} />
 
-          <div className="right">
-            {view === "uploading" && (
-              <div id="view-uploading">
-                <p className="status-title" id="upload-title">
-                  Uploading...
-                </p>
-                <div className="file-row">
-                  <div className="file-icon" aria-hidden="true">
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
-                      <path d="M14 3v5h5" />
-                    </svg>
-                  </div>
-                  <div className="file-meta">
-                    <p className="file-name" id="upload-name">
-                      {selectedFile?.name || "File"}
-                    </p>
-                    <p className="file-size" id="upload-size">
-                      {selectedFile
-                        ? `${Math.max(1, Math.round(selectedFile.size / 1024))} KB`
-                        : ""}
-                    </p>
-                  </div>
-                </div>
-                <div
-                  className="progress"
-                  id="progress"
-                  role="progressbar"
-                  aria-valuemin="0"
-                  aria-valuemax="100"
-                  aria-valuenow={uploadProgress}
-                  aria-labelledby="upload-title"
-                >
-                  <div
-                    className="progress-fill"
-                    id="progress-fill"
-                    style={{ width: `${uploadProgress}%` }}
-                  />
-                </div>
-                <p className="progress-label" id="progress-label">
-                  {uploadProgress}%
-                </p>
-                <div className="center">
-                  <button
-                    type="button"
-                    className="btn btn-ghost"
-                    onClick={resetUpload}
-                  >
-                    Cancel upload
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {view === "error" && (
-            <div id="view-error" role="alert">
-              <p className="status-title is-error">Upload failed</p>
-              <p className="error-text" id="error-message">
-                {errorMessage ||
-                  "Something went wrong while uploading your file."}
-              </p>
-              <button
-                type="button"
-                className="btn btn-primary btn-block"
-                onClick={() => setView("select")}
-              >
-                Try again
-              </button>
+            <div className="cs-row">
+              <label htmlFor="cs-exp">{t("csExpires")}</label>
+              <select id="cs-exp" value={expiresIn} onChange={(e) => setExpiresIn(e.target.value)}>
+                {EXPIRY.map(([v, k]) => <option key={v} value={v}>{t(k)}</option>)}
+              </select>
             </div>
-          )}
+            <p className="cs-muted cs-note">{t("csMax")}: {cfg.maxFileSizeMB} MB</p>
+            <button type="button" className="cs-btn cs-btn-primary cs-block" onClick={upload} disabled={!file || !cfg.available}>
+              <i className="ri-upload-2-line" /> {t("csUpload")}
+            </button>
           </div>
+        )}
 
-          {view === "success" && (
-            <div id="view-success">
-              <p className="status-title is-success">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.4"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M20 6 9 17l-5-5" />
-                </svg>
-                Upload Complete
-              </p>
-              <div className="file-row">
-                <div className="file-icon" aria-hidden="true">
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
-                    <path d="M14 3v5h5" />
-                  </svg>
-                </div>
-                <div className="file-meta">
-                  <p className="file-name" id="success-name">
-                    {selectedFile?.name || "Uploaded file"}
-                  </p>
-                  <p className="file-size" id="success-size">
-                    {selectedFile
-                      ? `${Math.max(1, Math.round(selectedFile.size / 1024))} KB`
-                      : ""}
-                  </p>
-                </div>
-              </div>
+        {view === "uploading" && (
+          <div className="cs-step">
+            <p className="cs-title">{t("csUploading")}</p>
+            <div className="cs-file"><i className="ri-file-3-line" /><div><p className="cs-fname">{file?.name}</p><p className="cs-muted">{file && fmtSize(file.size)}</p></div></div>
+            <div className="cs-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={progress}><div style={{ width: `${progress}%` }} /></div>
+            <p className="cs-muted cs-center">{progress}%</p>
+            <button type="button" className="cs-btn cs-btn-ghost cs-block" onClick={reset}>{t("csCancel")}</button>
+          </div>
+        )}
 
-              <p className="label">Your share link:</p>
-              <div className="link-box">
-                <input
-                  type="text"
-                  id="share-link"
-                  readOnly
-                  value={shareLink}
-                  aria-label="Share link"
-                />
-              </div>
-
-              <div className="actions">
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={handleCopy}
-                >
-                  Copy Link
-                </button>
-                <a
-                  className="btn btn-secondary"
-                  href={shareLink || "#"}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Open Link
-                </a>
-              </div>
-
-              <div className="center">
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={resetUpload}
-                >
-                  Upload another file
-                </button>
-              </div>
+        {view === "success" && (
+          <div className="cs-step">
+            <p className="cs-title cs-ok"><i className="ri-checkbox-circle-fill" /> {t("csDone")}</p>
+            <div className="cs-file"><i className="ri-file-3-line" /><div><p className="cs-fname">{file?.name}</p><p className="cs-muted">{file && fmtSize(file.size)}</p></div></div>
+            <label className="cs-muted" htmlFor="cs-link">{t("csYourLink")}</label>
+            <input id="cs-link" className="cs-input" readOnly value={link} onFocus={(e) => e.target.select()} />
+            <div className="cs-actions">
+              <button type="button" className="cs-btn cs-btn-primary" onClick={copy}><i className="ri-file-copy-line" /> {t("csCopy")}</button>
+              <a className="cs-btn cs-btn-ghost" href={link} target="_blank" rel="noopener noreferrer"><i className="ri-external-link-line" /> {t("csOpen")}</a>
             </div>
-          )}
-        </section>
+            <button type="button" className="cs-link-btn" onClick={reset}>{t("csAnother")}</button>
+          </div>
+        )}
 
-        <div className="visually-hidden" id="status-live" aria-live="polite" />
-      </main>
+        {view === "error" && (
+          <div className="cs-step" role="alert">
+            <p className="cs-title cs-bad"><i className="ri-error-warning-fill" /> {t("csFailed")}</p>
+            <p className="cs-muted">{error}</p>
+            <button type="button" className="cs-btn cs-btn-primary cs-block" onClick={() => setView("select")}>{t("csRetry")}</button>
+          </div>
+        )}
+      </section>
     </div>
   );
 }

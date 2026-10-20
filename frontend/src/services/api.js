@@ -32,7 +32,14 @@ async function request(path, { method = "GET", body, headers = {}, params } = {}
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch (_error) {
-    const error = new Error("Cannot reach the server. Please check your connection.");
+    // Almost always: VITE_API_URL missing/wrong on the deployed site, or the backend's
+    // CLIENT_URL does not match this site's origin (CORS). The console shows which.
+    console.error(`[API] request failed: ${url} (page origin: ${window.location.origin}). Check VITE_API_URL and the backend CLIENT_URL.`);
+    const error = new Error(
+      import.meta.env.PROD && /localhost|127\.0\.0\.1/.test(API_URL)
+        ? "This site is still pointing at localhost. Set VITE_API_URL in Vercel and redeploy the frontend."
+        : "Cannot reach the server. Please check your connection."
+    );
     error.status = 0;
     throw error;
   }

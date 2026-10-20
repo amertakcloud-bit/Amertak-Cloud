@@ -56,6 +56,7 @@ git push -u origin main
 |---|---|---|
 | `NODE_ENV` | `production` | ធ្វើឱ្យ cookie ជា `Secure` + `SameSite=None` |
 | `MONGODB_URI` | `mongodb+srv://…` | ពី Atlas |
+| `CLOUD_MONGODB_URI` | `mongodb+srv://…/cloudshare` | **ថ្មី** — MongoDB ដាច់ដោយឡែកសម្រាប់ CloudShare |
 | `SESSION_SECRET` | random វែង | `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"` |
 | `CLIENT_URL` | `https://<frontend>.vercel.app` | គ្មាន `/` ចុងក្រោយ។ ដាក់ច្រើនបាន បំបែកដោយ `,` |
 | `SERVER_URL` | `https://<backend>.vercel.app` | |
@@ -129,7 +130,7 @@ Google Cloud Console → Credentials → OAuth client → **Authorized redirect 
 | **ffmpeg** | `ffmpeg-static` ត្រូវបានបញ្ចូលតាម `includeFiles` ក្នុង `backend/vercel.json` (ទំហំ bundle ≤ 250 MB)។ |
 | **TTS** | ប្រើ `node-edge-tts` (pure JS) — គ្មាន Python/binary។ សំឡេងមកពី Microsoft Edge neural voices (km-KH Piseth/Sreymom)។ បើសេវាមិនឆ្លើយតប ត្រឡប់ error ច្បាស់លាស់ (គ្មានសំឡេងក្លែងក្លាយ)។ |
 | **Video Downloader** | គាំទ្រ TikTok (តាម tikwm), Pinterest និងតំណឯកសារ video/audio/image ផ្ទាល់។ YouTube/Facebook/Instagram/X **មិនគាំទ្រ**។ ប្រភពទាំងនេះជាសេវាភាគីទីបី ដែលអាចផ្លាស់ប្តូរ ឬរារាំងបានគ្រប់ពេល។ តំណទាញយកមានហត្ថលេខា + ផុតកំណត់ក្រោយ 30 នាទី ហើយបដិសេធអាសយដ្ឋានឯកជន (SSRF)។ |
-| **CloudShare** | ❌ **មិនដំណើរការលើ Vercel**: ឯកសារត្រូវបានរក្សាទុកក្នុង disk ដែល Vercel អានបានតែមួយបែប (read-only/ជាបណ្តោះអាសន្ន)។ UI ប្រាប់ច្បាស់ ហើយ API ឆ្លើយ `503 STORAGE_UNAVAILABLE`។ ដើម្បីប្រើវា ត្រូវផ្លាស់ទៅ object storage (Cloudflare R2 / S3 / Vercel Blob) ឬ host backend លើ Render/VPS។ |
+| **CloudShare** | ✅ ដំណើរការ ប្រសិនបើដាក់ `CLOUD_MONGODB_URI` (មូលដ្ឋានទិន្នន័យ MongoDB ដាច់ដោយឡែក)។ ឯកសារត្រូវរក្សាទុកក្នុង MongoDB។ ដែនកំណត់ Vercel: ≈ **4 MB** ក្នុងមួយឯកសារ។ បើមិនដាក់ env នេះ API ឆ្លើយ `503 STORAGE_UNAVAILABLE`។ |
 | **Rate limit** | រក្សាក្នុង memory ក្នុងមួយ instance — ជាអ្នកការពារមូលដ្ឋាន មិនមែនការគ្រប់គ្រងថ្លៃច្បាស់លាស់ទេ។ |
 | **Cold start** | request ដំបូងក្រោយពេលទំនេរអាចយឺត 1–3 វិនាទី (ភ្ជាប់ MongoDB)។ |
 

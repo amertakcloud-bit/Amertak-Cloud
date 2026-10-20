@@ -29,6 +29,7 @@ async function request(path, { method = "GET", json, form, headers = {}, blob = 
     });
   } catch (e) {
     if (e?.name === "AbortError") throw new ApiError("Cancelled", { code: "ABORTED" });
+    console.error(`[API] request failed: ${API_URL}${path} (page origin: ${window.location.origin}). Check VITE_API_URL and the backend CLIENT_URL.`);
     throw new ApiError("Cannot reach the server. Please check your connection.", { code: "NETWORK" });
   }
 

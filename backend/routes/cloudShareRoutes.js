@@ -7,11 +7,13 @@ import {
   uploadCloudShareFile,
 } from "../controllers/cloudShareController.js";
 
+import { CLOUDSHARE_MAX_BYTES } from "../services/cloudShareService.js";
+
 const router = Router();
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: Number(process.env.MAX_FILE_SIZE_MB || 100) * 1024 * 1024,
+    fileSize: CLOUDSHARE_MAX_BYTES + 1024,
   },
 });
 

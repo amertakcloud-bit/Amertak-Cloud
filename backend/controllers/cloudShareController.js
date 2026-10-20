@@ -1,7 +1,6 @@
-import { isCloudShareAvailable, createCloudShareRecord, findCloudShareRecord, getCloudShareConfig, incrementCloudShareDownloadCount, toPublicCloudShareRecord } from "../services/cloudShareService.js";
-import fs from "node:fs";
+import { CLOUDSHARE_MAX_BYTES, isCloudShareAvailable, createCloudShareRecord, findCloudShareRecord, getCloudShareConfig, incrementCloudShareDownloadCount, toPublicCloudShareRecord } from "../services/cloudShareService.js";
 
-const MAX_FILE_SIZE = Number(process.env.MAX_FILE_SIZE_MB || 100) * 1024 * 1024;
+const MAX_FILE_SIZE = CLOUDSHARE_MAX_BYTES;
 
 function makeError(status, code, message) {
   const error = new Error(message);
@@ -21,7 +20,7 @@ export async function uploadCloudShareFile(req, res) {
   if (!isCloudShareAvailable()) {
     return res.status(503).json({
       success: false,
-      error: { code: "STORAGE_UNAVAILABLE", message: "CloudShare needs persistent file storage, which this deployment does not have." },
+      error: { code: "STORAGE_UNAVAILABLE", message: "CloudShare is not set up on this server (CLOUD_MONGODB_URI is missing)." },
     });
   }
   if (!req.file) {
@@ -53,7 +52,7 @@ export async function uploadCloudShareFile(req, res) {
       expiresIn: req.body?.expiresIn,
     });
 
-    const baseUrl = process.env.PUBLIC_URL || `${req.protocol}://${req.get("host")}`;
+    const baseUrl = process.env.PUBLIC_URL || process.env.SERVER_URL || `${req.protocol}://${req.get("host")}`;
     const downloadUrl = `${baseUrl}/api/cloudshare/files/${record.shareId}/download`;
 
     return res.status(201).json({
@@ -70,8 +69,8 @@ export async function uploadCloudShareFile(req, res) {
       },
     });
   } catch (error) {
-    const code = error.code === "INVALID_EXPIRATION" ? "INVALID_EXPIRATION" : "INTERNAL_ERROR";
-    return res.status(error.code === "INVALID_EXPIRATION" ? 400 : 500).json({
+    const code = ["INVALID_EXPIRATION", "STORAGE_UNAVAILABLE"].includes(error.code) ? error.code : "INTERNAL_ERROR";
+    return res.status(code === "INVALID_EXPIRATION" ? 400 : code === "STORAGE_UNAVAILABLE" ? 503 : 500).json({
       success: false,
       error: {
         code,
@@ -95,7 +94,7 @@ export async function getCloudShareFileInfo(req, res) {
       file: toPublicCloudShareRecord(record),
     });
   } catch (error) {
-    return res.status(error.status || 500).json({
+    return res.status(error.code === "STORAGE_UNAVAILABLE" ? 503 : error.status || 500).json({
       success: false,
       error: {
         code: error.code || "INTERNAL_ERROR",
@@ -109,34 +108,22 @@ export async function downloadCloudShareFile(req, res) {
   const { shareId } = req.params;
 
   try {
-    const record = await findCloudShareRecord(shareId);
+    const record = await findCloudShareRecord(shareId, { withData: true });
     if (!record) {
       throw makeError(404, "FILE_NOT_FOUND", "The requested file was not found or has expired.");
     }
+    await incrementCloudShareDownloadCount(shareId);
 
-    const updatedRecord = await incrementCloudShareDownloadCount(shareId);
-    if (!updatedRecord) {
-      throw makeError(404, "FILE_NOT_FOUND", "The requested file was not found.");
-    }
-
-    const fileStream = fs.createReadStream(record.storagePath);
-    fileStream.on("error", () => {
-      if (!res.headersSent) {
-        res.status(404).json({
-          success: false,
-          error: { code: "FILE_NOT_FOUND", message: "The file could not be accessed." },
-        });
-      }
-    });
-
+    const d = record.data;
+    const buf = Buffer.isBuffer(d) ? d : Buffer.isBuffer(d?.buffer) ? d.buffer : Buffer.from(d);
+    const safe = record.originalName.replace(/[^\x20-\x7E]/g, "_").replace(/"/g, "");
     res.setHeader("Content-Type", record.mimeType || "application/octet-stream");
-    res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(record.originalName)}"`);
-    res.setHeader("Content-Length", String(record.size));
+    res.setHeader("Content-Disposition", `attachment; filename="${safe}"; filename*=UTF-8''${encodeURIComponent(record.originalName)}`);
+    res.setHeader("Content-Length", String(buf.length));
     res.setHeader("Cache-Control", "private, no-store");
-
-    fileStream.pipe(res);
+    res.end(buf);
   } catch (error) {
-    return res.status(error.status || 500).json({
+    return res.status(error.code === "STORAGE_UNAVAILABLE" ? 503 : error.status || 500).json({
       success: false,
       error: {
         code: error.code || "INTERNAL_ERROR",

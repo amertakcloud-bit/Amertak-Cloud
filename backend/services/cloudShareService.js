@@ -1,21 +1,12 @@
-import fs from "node:fs/promises";
-import path from "node:path";
 import crypto from "node:crypto";
-import { fileURLToPath } from "node:url";
+import dns from "node:dns";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const SERVER_ROOT = path.resolve(__dirname, "..");
-// On Vercel the project directory is read-only and /tmp is wiped between invocations, so
-// CloudShare is only available there when CLOUDSHARE_STORAGE_DIR points at a persistent
-// writable volume (it normally does not) — see Deployment.md.
-const STORAGE_ROOT = process.env.CLOUDSHARE_STORAGE_DIR ? path.resolve(process.env.CLOUDSHARE_STORAGE_DIR) : SERVER_ROOT;
-const STORAGE_DIR = process.env.CLOUDSHARE_STORAGE_DIR ? path.join(STORAGE_ROOT, "files") : path.join(SERVER_ROOT, "uploads");
-const METADATA_PATH = path.join(STORAGE_ROOT, process.env.CLOUDSHARE_STORAGE_DIR ? "" : "data", "cloudshare-metadata.json");
-
-export function isCloudShareAvailable() {
-  return !process.env.VERCEL || Boolean(process.env.CLOUDSHARE_STORAGE_DIR);
-}
+// CloudShare stores files in its OWN MongoDB database (CLOUD_MONGODB_URI), separate from
+// the main app database. Works on Vercel (no filesystem needed).
+// Vercel limits a request body to ~4.5 MB, so the default limit there is 4 MB.
+const DEFAULT_MB = process.env.VERCEL ? 4 : 15;
+const MAX_MB = Math.min(Number(process.env.CLOUDSHARE_MAX_MB || process.env.MAX_FILE_SIZE_MB || DEFAULT_MB) || DEFAULT_MB, 15);
+export const CLOUDSHARE_MAX_BYTES = MAX_MB * 1024 * 1024;
 
 const EXPIRY_OPTIONS = Object.freeze({
   never: null,
@@ -24,163 +15,135 @@ const EXPIRY_OPTIONS = Object.freeze({
   "7d": 7 * 24 * 60 * 60 * 1000,
 });
 
-let records = [];
+export function isCloudShareAvailable() {
+  return Boolean(process.env.CLOUD_MONGODB_URI);
+}
 
-async function ensureStorage() {
-  await fs.mkdir(STORAGE_DIR, { recursive: true });
-  await fs.mkdir(path.dirname(METADATA_PATH), { recursive: true });
+let connPromise = null;
+let Model = null;
 
-  try {
-    const raw = await fs.readFile(METADATA_PATH, "utf8");
-    if (raw.trim()) {
-      const parsed = JSON.parse(raw);
-      records = Array.isArray(parsed) ? parsed : [];
-    }
-  } catch (error) {
-    if (error.code !== "ENOENT") {
-      throw error;
-    }
+export async function getCloudModel() {
+  if (Model && Model.db.readyState === 1) return Model;
+  if (!isCloudShareAvailable()) {
+    const e = new Error("CloudShare database is not configured (CLOUD_MONGODB_URI).");
+    e.code = "STORAGE_UNAVAILABLE";
+    throw e;
   }
-}
+  if (!connPromise) {
+    connPromise = (async () => {
+      const { default: mongoose } = await import("mongoose"); // lazy: keeps unit tests light
+    const fileSchema = new mongoose.Schema(
+      {
+        shareId: { type: String, required: true, unique: true, index: true },
+        originalName: { type: String, required: true },
+        mimeType: { type: String, default: "application/octet-stream" },
+        size: { type: Number, required: true },
+        data: { type: Buffer, required: true, select: false },
+        downloadCount: { type: Number, default: 0 },
+        expiresAt: { type: Date, default: null },
+      },
+      { timestamps: true }
+    );
+    // MongoDB removes expired documents automatically (TTL); null expiresAt is ignored.
+    fileSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
-async function persistMetadata() {
-  await fs.writeFile(METADATA_PATH, JSON.stringify(records, null, 2), "utf8");
-}
 
-function sanitizeFilename(name) {
-  const fileName = String(name || "upload")
-    .replace(/[\\/<>:"|?*\u0000-\u001F]/g, "_")
-    .trim();
-
-  return fileName || "upload";
-}
-
-function getExpiresAt(expiresIn) {
-  const key = String(expiresIn || "never").toLowerCase();
-
-  if (!Object.prototype.hasOwnProperty.call(EXPIRY_OPTIONS, key)) {
-    const error = new Error("Invalid expiration option.");
-    error.code = "INVALID_EXPIRATION";
-    throw error;
-  }
-
-  const duration = EXPIRY_OPTIONS[key];
-  if (duration === null) return null;
-
-  return new Date(Date.now() + duration).toISOString();
-}
-
-function isExpired(record) {
-  return Boolean(record.expiresAt) && new Date(record.expiresAt).getTime() <= Date.now();
-}
-
-export async function pruneExpiredFiles() {
-  await ensureStorage();
-
-  const remaining = [];
-  for (const record of records) {
-    if (isExpired(record)) {
+      const uri = process.env.CLOUD_MONGODB_URI;
+      const opts = { serverSelectionTimeoutMS: 15000, connectTimeoutMS: 15000, maxPoolSize: 5 };
+      let conn;
       try {
-        await fs.unlink(record.storagePath).catch(() => {});
-      } catch {
-        // ignore cleanup failures; stale entries are removed below
+        conn = await mongoose.createConnection(uri, opts).asPromise();
+      } catch (err) {
+        if (uri.startsWith("mongodb+srv") && /querySrv|ESERVFAIL|ECONNREFUSED|ENOTFOUND/i.test(String(err?.message))) {
+          dns.setServers((process.env.DNS_SERVERS || "8.8.8.8,1.1.1.1").split(",").map((s) => s.trim()).filter(Boolean));
+          conn = await mongoose.createConnection(uri, opts).asPromise();
+        } else throw err;
       }
-      continue;
-    }
-
-    remaining.push(record);
+      Model = conn.model("CloudFile", fileSchema);
+      return Model;
+    })().catch((err) => {
+      connPromise = null; // retry on next request
+      throw err;
+    });
   }
-
-  if (remaining.length !== records.length) {
-    records = remaining;
-    await persistMetadata();
-  }
+  return connPromise;
 }
 
-export async function createCloudShareRecord({ originalName, mimeType, buffer, expiresIn }) {
-  await ensureStorage();
-
-  const safeName = sanitizeFilename(originalName);
-  let shareId = "";
-  let storagePath = "";
-
-  for (let attempt = 0; attempt < 10; attempt += 1) {
-    shareId = crypto.randomBytes(8).toString("hex");
-    storagePath = path.join(STORAGE_DIR, `${shareId}${path.extname(safeName) || ""}`);
-
-    if (!records.some((record) => record.shareId === shareId)) {
-      break;
-    }
-  }
-
-  await fs.writeFile(storagePath, buffer);
-
-  const record = {
-    shareId,
-    originalName: safeName,
-    mimeType: mimeType || "application/octet-stream",
-    size: buffer.length,
-    storagePath,
-    downloadCount: 0,
-    createdAt: new Date().toISOString(),
-    expiresAt: getExpiresAt(expiresIn),
-  };
-
-  records.push(record);
-  await persistMetadata();
-  return record;
+// Test hook: inject a fake model.
+export function __setCloudModel(m) {
+  Model = m;
+  connPromise = m ? Promise.resolve(m) : null;
+  if (m && !m.db) m.db = { readyState: 1 };
 }
 
 export function getCloudShareConfig() {
   return {
     available: isCloudShareAvailable(),
-    maxFileSizeMB: Number(process.env.MAX_FILE_SIZE_MB || 100),
-    maxFileSizeBytes: Number(process.env.MAX_FILE_SIZE_MB || 100) * 1024 * 1024,
+    maxFileSizeMB: MAX_MB,
+    maxFileSizeBytes: CLOUDSHARE_MAX_BYTES,
     expirationOptions: Object.keys(EXPIRY_OPTIONS),
   };
 }
 
-export async function findCloudShareRecord(shareId) {
-  await pruneExpiredFiles();
+function sanitizeFilename(name) {
+  const n = String(name || "upload").replace(/[\\/<>:"|?*\u0000-\u001F]/g, "_").trim();
+  return n.slice(0, 200) || "upload";
+}
 
-  const record = records.find((item) => item.shareId === shareId);
-  if (!record) {
-    return null;
+function getExpiresAt(expiresIn) {
+  const key = String(expiresIn || "never").toLowerCase();
+  if (!Object.prototype.hasOwnProperty.call(EXPIRY_OPTIONS, key)) {
+    const e = new Error("Invalid expiration option.");
+    e.code = "INVALID_EXPIRATION";
+    throw e;
   }
+  const d = EXPIRY_OPTIONS[key];
+  return d === null ? null : new Date(Date.now() + d);
+}
 
-  if (isExpired(record)) {
-    await pruneExpiredFiles();
-    return null;
-  }
+export async function createCloudShareRecord({ originalName, mimeType, buffer, expiresIn }) {
+  const expiresAt = getExpiresAt(expiresIn);
+  const M = await getCloudModel();
+  const doc = await M.create({
+    shareId: crypto.randomBytes(9).toString("base64url"),
+    originalName: sanitizeFilename(originalName),
+    mimeType: mimeType || "application/octet-stream",
+    size: buffer.length,
+    data: buffer,
+    expiresAt,
+  });
+  return plain(doc);
+}
 
-  return record;
+function plain(doc) {
+  const o = typeof doc.toObject === "function" ? doc.toObject() : doc;
+  return { ...o, expiresAt: o.expiresAt ? new Date(o.expiresAt).toISOString() : null };
+}
+
+export async function findCloudShareRecord(shareId, { withData = false } = {}) {
+  const M = await getCloudModel();
+  let q = M.findOne({ shareId: String(shareId) });
+  if (withData) q = q.select("+data");
+  const doc = await q;
+  if (!doc) return null;
+  const rec = plain(doc);
+  if (rec.expiresAt && new Date(rec.expiresAt).getTime() <= Date.now()) return null;
+  return rec;
 }
 
 export async function incrementCloudShareDownloadCount(shareId) {
-  const record = await findCloudShareRecord(shareId);
-  if (!record) {
-    return null;
-  }
-
-  const index = records.findIndex((item) => item.shareId === shareId);
-  if (index !== -1) {
-    records[index].downloadCount = Number(records[index].downloadCount || 0) + 1;
-    await persistMetadata();
-  }
-
-  return records[index];
+  const M = await getCloudModel();
+  await M.updateOne({ shareId: String(shareId) }, { $inc: { downloadCount: 1 } });
 }
 
-export function toPublicCloudShareRecord(record) {
+export function toPublicCloudShareRecord(r) {
   return {
-    shareId: record.shareId,
-    name: record.originalName,
-    size: record.size,
-    mimeType: record.mimeType,
-    downloadCount: record.downloadCount,
-    createdAt: record.createdAt,
-    expiresAt: record.expiresAt || null,
+    shareId: r.shareId,
+    name: r.originalName,
+    size: r.size,
+    mimeType: r.mimeType,
+    downloadCount: r.downloadCount || 0,
+    expiresAt: r.expiresAt || null,
+    createdAt: r.createdAt || null,
   };
 }
-
-export { EXPIRY_OPTIONS };

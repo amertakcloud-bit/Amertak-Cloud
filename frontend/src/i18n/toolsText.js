@@ -71,7 +71,11 @@ export const en = {
   ttsReady: "Audio is ready.", ttsEmpty: "Please enter some Khmer text first.", ttsChars: "characters",
 
   // CloudShare
-  csChooseFile: "Please choose a file first.", csUnavailable: "CloudShare needs persistent file storage, which this deployment does not provide.",
+  csChooseFile: "Please choose a file first.",   csUnavailable: "CloudShare is not set up on this server yet (the CloudShare database is missing).",
+  csTitle: "Cloud Share", csSub: "Upload a file, get a link, and share it anywhere.", csDrop: "Drag & drop your file here", csOr: "or", csBrowse: "Browse files",
+  csExpires: "Link expires", csNever: "Never", cs1h: "In 1 hour", cs1d: "In 1 day", cs7d: "In 7 days", csMax: "Maximum file size", csUpload: "Upload file",
+  csUploading: "Uploading…", csCancel: "Cancel", csDone: "Upload complete", csYourLink: "Your share link", csCopy: "Copy link", csOpen: "Open link", csAnother: "Upload another file",
+  csFailed: "Upload failed", csRetry: "Try again", csRemove: "Remove file",
   csTooLarge: "The file is too large for this server (limit ≈ 4 MB on Vercel).", csBadResponse: "The server returned an unexpected response.",
 
   // Error codes (from the API)
@@ -155,7 +159,11 @@ export const km = {
 
   ttsReady: "សម្លេងរួចរាល់។", ttsEmpty: "សូមវាយអត្ថបទខ្មែរជាមុនសិន។", ttsChars: "តួអក្សរ",
 
-  csChooseFile: "សូមជ្រើសរើសឯកសារជាមុនសិន។", csUnavailable: "CloudShare ត្រូវការកន្លែងផ្ទុកឯកសារអចិន្ត្រៃយ៍ ដែលការដាក់ឱ្យប្រើនេះមិនមាន។",
+  csChooseFile: "សូមជ្រើសរើសឯកសារជាមុនសិន។",   csUnavailable: "CloudShare មិនទាន់ត្រូវបានរៀបចំលើម៉ាស៊ីនបម្រើនេះទេ (ខ្វះមូលដ្ឋានទិន្នន័យ CloudShare)។",
+  csTitle: "Cloud Share", csSub: "ផ្ទុកឡើងឯកសារ ទទួលតំណ ហើយចែករំលែកគ្រប់ទីកន្លែង។", csDrop: "អូស & ទម្លាក់ឯកសារនៅទីនេះ", csOr: "ឬ", csBrowse: "ជ្រើសរើសឯកសារ",
+  csExpires: "តំណផុតកំណត់", csNever: "មិនដែល", cs1h: "ក្នុង ១ ម៉ោង", cs1d: "ក្នុង ១ ថ្ងៃ", cs7d: "ក្នុង ៧ ថ្ងៃ", csMax: "ទំហំឯកសារអតិបរមា", csUpload: "ផ្ទុកឡើង",
+  csUploading: "កំពុងផ្ទុកឡើង…", csCancel: "បោះបង់", csDone: "ផ្ទុកឡើងរួចរាល់", csYourLink: "តំណចែករំលែករបស់អ្នក", csCopy: "ចម្លងតំណ", csOpen: "បើកតំណ", csAnother: "ផ្ទុកឡើងឯកសារផ្សេងទៀត",
+  csFailed: "ផ្ទុកឡើងបរាជ័យ", csRetry: "ព្យាយាមម្តងទៀត", csRemove: "លុបឯកសារ",
   csTooLarge: "ឯកសារធំពេកសម្រាប់ម៉ាស៊ីនបម្រើនេះ (កំណត់ ≈ 4 MB លើ Vercel)។", csBadResponse: "ម៉ាស៊ីនបម្រើឆ្លើយតបមិនត្រឹមត្រូវ។",
 
   err_UNKNOWN: "មានបញ្ហា សូមសាកល្បងម្តងទៀត។", err_NETWORK: "មិនអាចតភ្ជាប់ម៉ាស៊ីនបម្រើបានទេ សូមពិនិត្យអ៊ីនធឺណិត ហើយសាកម្តងទៀត។",
