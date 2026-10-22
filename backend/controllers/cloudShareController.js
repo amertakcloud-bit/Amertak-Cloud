@@ -21,7 +21,7 @@ export async function uploadCloudShareFile(req, res) {
   if (!isCloudShareAvailable()) {
     return res.status(503).json({
       success: false,
-      error: { code: "STORAGE_UNAVAILABLE", message: "CloudShare is not set up on this server (CLOUD_MONGODB_URI is missing)." },
+      error: { code: "STORAGE_UNAVAILABLE", message: "CloudShare is not set up on this server (set CLOUD_MONGODB_URI, or CLOUD_DATABASE_PATH for local SQLite)." },
     });
   }
   if (!req.file) {
@@ -49,7 +49,7 @@ export async function uploadCloudShareFile(req, res) {
   const cost = tokensForBytes(req.file.size, RATES.cloudSharePerMB);
   let balance;
   try {
-    balance = await chargeTokens(req.user._id, cost);
+    balance = await chargeTokens(req.user._id, cost, "cloudshare");
   } catch (err) {
     return res.status(err.statusCode || 500).json({
       success: false,
@@ -84,7 +84,7 @@ export async function uploadCloudShareFile(req, res) {
       tokens: balance,
     });
   } catch (error) {
-    await refundTokens(req.user._id, cost).catch(() => {});
+    await refundTokens(req.user._id, cost, "cloudshare").catch(() => {});
     const code = ["INVALID_EXPIRATION", "STORAGE_UNAVAILABLE"].includes(error.code) ? error.code : "INTERNAL_ERROR";
     return res.status(code === "INVALID_EXPIRATION" ? 400 : code === "STORAGE_UNAVAILABLE" ? 503 : 500).json({
       success: false,

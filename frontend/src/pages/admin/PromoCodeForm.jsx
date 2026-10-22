@@ -1,4 +1,5 @@
 import { useState } from "react";
+import Select from "../../components/ui/Select";
 import { useNavigate } from "react-router-dom";
 import adminService from "../../services/adminService";
 
@@ -98,7 +99,7 @@ export default function PromoCodeForm() {
               </div>
               <div className="input">
                 <label htmlFor="type">Type</label>
-                <select
+                <Select
                   id="type"
                   name="type"
                   defaultValue="fixed"
@@ -106,7 +107,7 @@ export default function PromoCodeForm() {
                 >
                   <option value="fixed">Fixed Amount (e.g. $5 off)</option>
                   <option value="percent">Percentage (e.g. 10% off)</option>
-                </select>
+                </Select>
               </div>
             </div>
 

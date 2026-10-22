@@ -91,6 +91,14 @@ export const toolsApi = {
   // ── QR
   qr: (body) => request("/qr", { method: "POST", json: body, blob: true }),
 
+  qrImageUpload: (file) => {
+    const form = new FormData();
+    form.append("image", file, file.name || "image");
+    return request("/qr/image", { method: "POST", form });
+  },
+  // Absolute public URL that the QR code encodes (works with a relative /api base too).
+  qrImageUrl: (path) => `${/^https?:/i.test(API_URL) ? API_URL : window.location.origin + API_URL}${path}`,
+
   // ── Image → prompt
   imagePrompt: (file, { style, language }, signal) => {
     const form = new FormData();
@@ -101,6 +109,7 @@ export const toolsApi = {
   },
 
   // ── Video editor
+  editorAi: (instruction, project, signal) => request("/editor/ai", { method: "POST", json: { instruction, project }, withKey: true, signal }),
   editorTranslate: (lines, from, signal) => request("/editor/translate", { method: "POST", json: { lines, from }, withKey: true, signal }),
 
   // ── Video downloader

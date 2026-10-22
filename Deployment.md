@@ -233,3 +233,21 @@ npm test                    # lib tests (chunker, WAV, SRT editor …)
 | — | `/api/auth/*`, `/api/users/*`, `/api/payments/*`, `/api/promo-codes/*`, `/api/admin/*`, `/api/cloudshare/*` | ដើម |
 
 Header `x-gemini-api-key` ប្រើជាមួយ `/api/srt/chunk`, `/api/srt/validate-key` និង `/api/image-prompt` ប៉ុណ្ណោះ។ Key មិនត្រូវបានរក្សាទុក ឬចុះក្នុង log ទេ (error ត្រូវបាន redact)។
+
+---
+
+## ដំណើរការលើកុំព្យូទ័រ (Local) ដោយប្រើ SQLite
+
+មិនចាំបាច់មាន MongoDB ដើម្បីសាកល្បងក្នុងកុំព្យូទ័រទេ។ ប្រសិនបើ `MONGODB_URI` ទទេ backend ប្រើឯកសារ SQLite ដោយស្វ័យប្រវត្តិ (ដំណើរការដូច MongoDB)៖
+
+| Env | ប្រើសម្រាប់ | លំនាំដើម |
+|---|---|---|
+| `DATABASE_PATH` | database ចម្បង (users, payments, token usage) ពេល `MONGODB_URI` ទទេ | `backend/data/amertak.sqlite` |
+| `CLOUD_DATABASE_PATH` | CloudShare, Video Editor projects, QR images ពេល `CLOUD_MONGODB_URI` ទទេ | `backend/data/cloud.sqlite` |
+
+```bash
+cd backend && npm install && npm run dev      # backend → http://localhost:5000
+cd frontend && npm install && npm run dev     # frontend → http://localhost:5173
+```
+
+លើ Vercel ត្រូវប្រើ MongoDB (`MONGODB_URI`, `CLOUD_MONGODB_URI`) ព្រោះ file system មិនអាចសរសេរបាន។

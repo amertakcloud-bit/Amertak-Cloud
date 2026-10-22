@@ -99,3 +99,62 @@ export const deleteGeminiKey = asyncHandler(async (req, res) => {
   await User.updateOne({ _id: req.user._id }, { $set: { geminiKeyEnc: "" } });
   res.json({ success: true, data: { hasKey: false, masked: "" }, message: "Gemini API key removed." });
 });
+
+// ── Dashboard: purchases + token usage ──
+const PAD = (n) => String(Math.abs(n)).padStart(2, "0");
+const tzString = (min) => `${min <= 0 ? "+" : "-"}${PAD(Math.floor(Math.abs(min) / 60))}:${PAD(Math.abs(min) % 60)}`; // JS offset is inverted
+
+// GET /api/users/dashboard?days=30&tz=<Date.getTimezoneOffset()>
+export const getDashboard = asyncHandler(async (req, res) => {
+  const days = Math.min(90, Math.max(7, parseInt(req.query.days, 10) || 30));
+  let tzMin = parseInt(req.query.tz, 10);
+  if (!Number.isFinite(tzMin) || Math.abs(tzMin) > 840) tzMin = 0;
+  const tz = tzString(tzMin);
+  const since = new Date(Date.now() - days * 86400000);
+
+  const [{ default: TokenUsage }, { default: Payment }] = await Promise.all([
+    import("../models/TokenUsage.js"),
+    import("../models/Payment.js"),
+  ]);
+  const uid = req.user._id;
+
+  const [byDayRaw, byToolRaw, recent, payments, bought] = await Promise.all([
+    TokenUsage.aggregate([
+      { $match: { user: uid, createdAt: { $gte: since } } },
+      { $group: { _id: { $dateToString: { date: "$createdAt", format: "%Y-%m-%d", timezone: tz } }, tokens: { $sum: "$tokens" } } },
+    ]),
+    TokenUsage.aggregate([
+      { $match: { user: uid, createdAt: { $gte: since } } },
+      { $group: { _id: "$tool", tokens: { $sum: "$tokens" }, count: { $sum: { $cond: [{ $gt: ["$tokens", 0] }, 1, 0] } } } },
+      { $sort: { tokens: -1 } },
+    ]),
+    TokenUsage.find({ user: uid }).sort({ createdAt: -1 }).limit(15).lean(),
+    Payment.find({ user: uid, claimedAt: { $ne: null } }).sort({ claimedAt: -1 }).limit(50).lean(),
+    Payment.aggregate([{ $match: { user: uid, claimedAt: { $ne: null } } }, { $group: { _id: null, tokens: { $sum: "$tokens" }, price: { $sum: "$price" } } }]),
+  ]);
+
+  // Continuous list of days (missing days = 0) in the user's timezone.
+  const map = new Map(byDayRaw.map((d) => [d._id, Math.max(0, d.tokens)]));
+  const byDay = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 86400000 - tzMin * 60000); // shift to the user's local clock
+    const key = d.toISOString().slice(0, 10);
+    byDay.push({ date: key, tokens: map.get(key) || 0 });
+  }
+  const spent = byDay.reduce((s, d) => s + d.tokens, 0);
+
+  res.json({
+    success: true,
+    data: {
+      balance: req.user.tokens ?? 0,
+      days,
+      spent,
+      boughtTokens: bought[0]?.tokens || 0,
+      boughtUsd: Math.round((bought[0]?.price || 0) * 100) / 100,
+      byDay,
+      byTool: byToolRaw.map((t) => ({ tool: t._id, tokens: Math.max(0, t.tokens), count: t.count })),
+      recent: recent.map((r) => ({ tool: r.tool, tokens: r.tokens, at: r.createdAt })),
+      payments: payments.map((p) => ({ planName: p.planName, price: p.price, tokens: p.tokens, at: p.claimedAt || p.paidAt || p.createdAt })),
+    },
+  });
+});

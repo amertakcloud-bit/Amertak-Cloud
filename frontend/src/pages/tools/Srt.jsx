@@ -73,6 +73,8 @@ export default function Srt() {
   const { user, refreshUser } = useAuth();
 
   const [file, setFile] = useState(null);
+  const [link, setLink] = useState("");
+  const [fetching, setFetching] = useState(false);
   const [settings, setSettings] = useState(DEFAULTS);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(null);
@@ -108,6 +110,27 @@ export default function Srt() {
       if (r.top < box.top || r.bottom > box.bottom) list.current.scrollTo({ top: el.offsetTop - list.current.offsetTop - 12, behavior: "smooth" });
     }
   }, [activeId, playing]);
+
+  // Paste a TikTok / Pinterest / direct link → download the audio (or video) → use it as the source file.
+  async function fetchLink() {
+    const url = link.trim();
+    if (!url || fetching || busy) return;
+    if (!/^https?:\/\//i.test(url)) { toast.error(t("srtLinkBad")); return; }
+    setFetching(true); setError("");
+    try {
+      const r = await toolsApi.videoResolve(url);
+      const fm = r.data.formats.find((x) => x.kind === "audio") || r.data.formats.find((x) => x.kind === "video");
+      if (!fm) throw new Error(t("srtLinkNoMedia"));
+      const res = await fetch(toolsApi.videoDownloadUrl(fm.token));
+      if (!res.ok) throw new Error(t("srtLinkFail"));
+      const blob = await res.blob();
+      const name = `${(r.data.title || "link").replace(/[^\p{L}\p{N}_ -]+/gu, "").trim().slice(0, 60) || "link"}.${fm.ext || "mp4"}`;
+      setFile(new File([blob], name, { type: blob.type || (fm.kind === "audio" ? "audio/mpeg" : "video/mp4") }));
+      setResult(null); setCues([]);
+      toast.success(t("srtLinkOk"));
+    } catch (e) { const m = friendlyError(e, t); setError(m); toast.error(m); }
+    finally { setFetching(false); }
+  }
 
   async function generate() {
     if (!file || busy) return;
@@ -192,6 +215,17 @@ export default function Srt() {
       <div className="tk-card">
         <Dropzone accept="audio/*,video/*,.mp3,.wav,.m4a,.ogg,.flac,.aac,.mp4,.mov,.webm,.mkv" file={file} onFile={(f) => { setFile(f); setResult(null); setCues([]); setError(""); }}
           onClear={() => { setFile(null); setResult(null); setCues([]); }} disabled={busy} icon="ri-voice-recognition-line" hintKey="srtDropHint" />
+
+        <div className="srt-link">
+          <div className="tk-label"><i className="ri-links-line" />{t("srtLinkLabel")}</div>
+          <div className="tk-row" style={{ gap: 8, flexWrap: "wrap" }}>
+            <input className="tk-input" style={{ flex: "1 1 240px" }} type="url" inputMode="url" placeholder="https://www.tiktok.com/…  ·  https://pin.it/…" value={link}
+              onChange={(e) => setLink(e.target.value)} onKeyDown={(e) => e.key === "Enter" && fetchLink()} disabled={busy || fetching} spellCheck={false} />
+            <button type="button" className="tk-btn" onClick={fetchLink} disabled={!link.trim() || busy || fetching}>
+              <i className={fetching ? "ri-loader-4-line spin" : "ri-download-cloud-2-line"} />{fetching ? t("srtLinkFetching") : t("srtLinkBtn")}
+            </button>
+          </div>
+        </div>
 
         <details>
           <summary className="tk-label" style={{ cursor: "pointer" }}><i className="ri-equalizer-3-line" />{t("srtSettings")}</summary>

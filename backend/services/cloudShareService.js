@@ -15,8 +15,11 @@ const EXPIRY_OPTIONS = Object.freeze({
   "7d": 7 * 24 * 60 * 60 * 1000,
 });
 
+import { cloudOdm, cloudSqlitePath, sqliteAllowed, useCloudMongo } from "../lib/odm/index.js";
+
+// Available with CLOUD_MONGODB_URI (MongoDB) or, on a local PC, a SQLite file (CLOUD_DATABASE_PATH).
 export function isCloudShareAvailable() {
-  return Boolean(process.env.CLOUD_MONGODB_URI);
+  return useCloudMongo() || sqliteAllowed("CLOUD_DATABASE_PATH");
 }
 
 let connPromise = null;
@@ -34,13 +37,13 @@ export async function getCloudConnection() {
 export async function getCloudModel() {
   if (Model && Model.db.readyState === 1) return Model;
   if (!isCloudShareAvailable()) {
-    const e = new Error("CloudShare database is not configured (CLOUD_MONGODB_URI).");
+    const e = new Error("CloudShare database is not configured (set CLOUD_MONGODB_URI, or CLOUD_DATABASE_PATH for a local SQLite file).");
     e.code = "STORAGE_UNAVAILABLE";
     throw e;
   }
   if (!connPromise) {
     connPromise = (async () => {
-      const { default: mongoose } = await import("mongoose"); // lazy: keeps unit tests light
+      const mongoose = await cloudOdm(); // real mongoose (CLOUD_MONGODB_URI) or the SQLite look-alike
     const fileSchema = new mongoose.Schema(
       {
         shareId: { type: String, required: true, unique: true, index: true },
@@ -61,9 +64,9 @@ export async function getCloudModel() {
       const opts = { serverSelectionTimeoutMS: 15000, connectTimeoutMS: 15000, maxPoolSize: 5 };
       let conn;
       try {
-        conn = await mongoose.createConnection(uri, opts).asPromise();
+        conn = useCloudMongo() ? await mongoose.createConnection(uri, opts).asPromise() : await mongoose.createConnection(cloudSqlitePath()).asPromise();
       } catch (err) {
-        if (uri.startsWith("mongodb+srv") && /querySrv|ESERVFAIL|ECONNREFUSED|ENOTFOUND/i.test(String(err?.message))) {
+        if (uri && uri.startsWith("mongodb+srv") && /querySrv|ESERVFAIL|ECONNREFUSED|ENOTFOUND/i.test(String(err?.message))) {
           dns.setServers((process.env.DNS_SERVERS || "8.8.8.8,1.1.1.1").split(",").map((s) => s.trim()).filter(Boolean));
           conn = await mongoose.createConnection(uri, opts).asPromise();
         } else throw err;

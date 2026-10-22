@@ -19,13 +19,23 @@ const User = { findOneAndUpdate: async (...a) => (await import("../models/User.j
 const TokenJob = { create: async (...a) => (await import("../models/TokenJob.js")).default.create(...a), findOneAndUpdate: async (...a) => (await import("../models/TokenJob.js")).default.findOneAndUpdate(...a) };
 
 // Test seam (unit/e2e tests replace these; production uses MongoDB).
-export const deps = { charge: (...a) => chargeInDb(...a), refund: (...a) => refundInDb(...a) };
+async function recordInDb(userId, tool, tokens) {
+  try {
+    await (await import("../models/TokenUsage.js")).default.create({ user: userId, tool, tokens });
+  } catch (e) {
+    console.warn("[usage] could not record:", e.message); // never block a paid action on stats
+  }
+}
+
+export const deps = { usage: (...a) => recordInDb(...a), charge: (...a) => chargeInDb(...a), refund: (...a) => refundInDb(...a) };
 
 const secret = () => process.env.SESSION_SECRET || "insecure-dev-secret-change-me";
 
 // Atomically takes `cost` tokens; throws 402 when the balance is too low.
-export async function chargeTokens(userId, cost) {
-  return deps.charge(userId, cost);
+export async function chargeTokens(userId, cost, tool = "other") {
+  const balance = await deps.charge(userId, cost);
+  await deps.usage(userId, tool, cost);
+  return balance;
 }
 
 async function chargeInDb(userId, cost) {
@@ -46,8 +56,9 @@ async function chargeInDb(userId, cost) {
   return user.tokens;
 }
 
-export async function refundTokens(userId, cost) {
-  return deps.refund(userId, cost);
+export async function refundTokens(userId, cost, tool = "other") {
+  await deps.refund(userId, cost);
+  await deps.usage(userId, tool, -cost);
 }
 
 async function refundInDb(userId, cost) {
@@ -57,7 +68,7 @@ async function refundInDb(userId, cost) {
 
 // ── Paid jobs that span several requests (captions: the browser sends many audio chunks) ──
 export async function startJob(userId, kind, cost) {
-  const balance = await chargeTokens(userId, cost);
+  const balance = await chargeTokens(userId, cost, kind);
   const jti = crypto.randomBytes(12).toString("hex");
   await TokenJob.create({ jti, user: userId, kind, cost });
   const jwt = (await import("jsonwebtoken")).default;
@@ -81,17 +92,17 @@ export async function refundJob(token, userId, kind) {
   const p = await verifyJob(token, userId, kind);
   const job = await TokenJob.findOneAndUpdate({ jti: p.jti, user: userId, refunded: false }, { refunded: true });
   if (!job) return 0;
-  await refundTokens(userId, job.cost);
+  await refundTokens(userId, job.cost, kind);
   return job.cost;
 }
 
 // Wraps a paid single-request operation: charge → run → refund on failure.
-export async function withCharge(userId, cost, fn) {
-  const balance = await chargeTokens(userId, cost);
+export async function withCharge(userId, cost, fn, tool = "other") {
+  const balance = await chargeTokens(userId, cost, tool);
   try {
     return { result: await fn(), balance };
   } catch (err) {
-    await refundTokens(userId, cost).catch(() => {});
+    await refundTokens(userId, cost, tool).catch(() => {});
     throw err;
   }
 }

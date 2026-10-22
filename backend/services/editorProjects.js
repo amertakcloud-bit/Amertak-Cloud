@@ -13,10 +13,10 @@ export const deps = { getModel: null }; // test seam
 async function model() {
   if (deps.getModel) return deps.getModel();
   if (!isCloudShareAvailable()) {
-    throw new AppError(503, "STORAGE_UNAVAILABLE", "Video projects need the CloudShare database (CLOUD_MONGODB_URI is missing on the server).");
+    throw new AppError(503, "STORAGE_UNAVAILABLE", "Video projects need the CloudShare database (set CLOUD_MONGODB_URI, or CLOUD_DATABASE_PATH for a local SQLite file).");
   }
   const conn = await getCloudConnection();
-  const mongoose = (await import("mongoose")).default;
+  const mongoose = await (await import("../lib/odm/index.js")).cloudOdm();
   if (conn.models.EditorProject) return conn.models.EditorProject;
   const schema = new mongoose.Schema(
     {

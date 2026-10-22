@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import Select from "../../components/ui/Select";
 import { API_URL, getToken } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import TokenCost from "../../components/tools/TokenCost";
@@ -156,9 +157,9 @@ export default function CloudShare() {
 
             <div className="cs-row">
               <label htmlFor="cs-exp">{t("csExpires")}</label>
-              <select id="cs-exp" value={expiresIn} onChange={(e) => setExpiresIn(e.target.value)}>
+              <Select id="cs-exp" value={expiresIn} onChange={(e) => setExpiresIn(e.target.value)}>
                 {EXPIRY.map(([v, k]) => <option key={v} value={v}>{t(k)}</option>)}
-              </select>
+              </Select>
             </div>
             <p className="cs-muted cs-note">{t("csMax")}: {cfg.maxFileSizeMB} MB</p>
             <TokenCost bytes={file?.size} perMB={RATES.cloudSharePerMB} />

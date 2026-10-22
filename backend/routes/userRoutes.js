@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { deleteGeminiKey, getGeminiKeyStatus, getMe, saveGeminiKey, updateMe } from "../controllers/userController.js";
+import { deleteGeminiKey, getDashboard, getGeminiKeyStatus, getMe, saveGeminiKey, updateMe } from "../controllers/userController.js";
 import { protect } from "../middleware/authMiddleware.js";
 
 const router = Router();
@@ -8,6 +8,7 @@ const router = Router();
 router.get("/me", protect, getMe);
 router.put("/me", protect, updateMe);
 
+router.get("/dashboard", protect, getDashboard);
 router.get("/gemini-key", protect, getGeminiKeyStatus);
 router.put("/gemini-key", protect, saveGeminiKey);
 router.delete("/gemini-key", protect, deleteGeminiKey);

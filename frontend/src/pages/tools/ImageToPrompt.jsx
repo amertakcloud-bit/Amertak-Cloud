@@ -1,9 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import ToolShell from "../../components/tools/ToolShell";
 import Dropzone from "../../components/tools/Dropzone";
-import TokenCost from "../../components/tools/TokenCost";
-import { RATES, tokensForBytes } from "../../lib/tokens";
-import { useAuth } from "../../context/AuthContext";
 import GeminiKeyPanel, { useGeminiAccess } from "../../components/tools/GeminiKey";
 import { useLanguage } from "../../context/LanguageContext";
 import { useFeedback } from "../../components/ui/Feedback";
@@ -24,7 +21,6 @@ export default function ImageToPrompt() {
   const { toast } = useFeedback();
   const { data: status } = useToolsStatus();
   const access = useGeminiAccess(status);
-  const { user, refreshUser } = useAuth();
   const [small, setSmall] = useState(null); // the (downsized) image that is actually uploaded and billed
 
   const [file, setFile] = useState(null);
@@ -52,17 +48,14 @@ export default function ImageToPrompt() {
 
   async function run() {
     if (!file || busy) return;
-    if (!user) { toast.info(t("tokLogin")); return; }
     if (!access.ready) { toast.info(t("keyRequired")); return; }
     if (!small) return;
-    if (tokensForBytes(small.size, RATES.captionPerMB) > Number(user.tokens ?? 0)) { toast.error(t("err_INSUFFICIENT_TOKENS")); return; }
     setBusy(true); setError(""); setResult(null);
     abort.current = new AbortController();
     try {
       const res = await toolsApi.imagePrompt(small, { style, language: lang }, abort.current.signal);
       setResult(res.data);
-      refreshUser();
-      toast.success(`${t("ipDone")} ${t("tokCharged").replace("{n}", String(res.data.cost))}`);
+      toast.success(t("ipDone"));
     } catch (e) {
       if (e.code !== "ABORTED") { const m = friendlyError(e, t); setError(m); toast.error(m); }
     } finally {
@@ -94,10 +87,10 @@ export default function ImageToPrompt() {
               <button type="button" className={lang === "km" ? "active" : ""} onClick={() => setLang("km")}>ខ្មែរ</button>
             </div>
           </div>
-          <button type="button" className="tk-btn full" disabled={!small || busy || !access.ready || !user} onClick={run}>
+          <button type="button" className="tk-btn full" disabled={!small || busy || !access.ready} onClick={run}>
             <i className={busy ? "ri-loader-4-line spin" : "ri-sparkling-2-line"} />{busy ? t("ipWorking") : t("ipGenerate")}
           </button>
-          <TokenCost bytes={small?.size} perMB={RATES.captionPerMB} />
+          <div className="tk-hint"><i className="ri-gift-line" /> {t("ipFree")}</div>
         </div>
 
         <div className="tk-card" aria-live="polite">

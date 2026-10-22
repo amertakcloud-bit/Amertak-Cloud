@@ -1,4 +1,5 @@
-import { RATES, tokensForBytes, withCharge } from "../lib/billing.js";
+import { RATES } from "../lib/billing.js";
+import { isCloudShareAvailable } from "../services/cloudShareService.js";
 import { Readable } from "node:stream";
 import { AppError } from "../lib/AppError.js";
 import { serverKeyConfigured, getModels } from "../lib/geminiClient.js";
@@ -26,7 +27,7 @@ export const getTools = (req, res) => {
         tts: { available: true, voices: KHMER_VOICES },
         srt: { available: true, model: getModels().transcribe, serverKey: serverKeyConfigured() },
         imagePrompt: { available: true, styles: Object.keys(STYLES), serverKey: serverKeyConfigured() },
-        videoEditor: { available: Boolean(process.env.CLOUD_MONGODB_URI), voices: ["piseth", "sreymom"], captionPerMB: RATES.captionPerMB },
+        videoEditor: { available: isCloudShareAvailable(), voices: ["piseth", "sreymom"], captionPerMB: RATES.captionPerMB },
         video: { available: true, providers: ["tiktok", "pinterest", "direct"] },
         audio: { available: true, formats: Object.keys(FORMATS), bitrates: BITRATES, serverMaxMb: MAX_UPLOAD_MB },
       },
@@ -50,17 +51,14 @@ export const createQr = asyncHandler(async (req, res) => {
 // POST /api/image-prompt  multipart: image, style, language
 export const createImagePrompt = asyncHandler(async (req, res) => {
   if (!req.file?.buffer?.length) throw new AppError(400, "NO_FILE", 'Attach an image in the "image" field.');
-  // Charged when the button is pressed: ceil(MB × 5) whole tokens, refunded if generation fails.
-  const cost = tokensForBytes(req.file.size ?? req.file.buffer.length, RATES.captionPerMB);
-  const { result: data, balance } = await withCharge(req.user._id, cost, () =>
-    imageToPrompt({
-      apiKey: req.gemini.key,
-      image: req.file.buffer,
-      style: req.body?.style || "detailed",
-      language: req.body?.language === "km" ? "km" : "en",
-    })
-  );
-  res.json({ success: true, data: { ...data, keySource: req.gemini.source, cost, tokens: balance } });
+  // Free tool: no tokens are charged. A Gemini key is still required (own key, saved key, or server key if logged in).
+  const data = await imageToPrompt({
+    apiKey: req.gemini.key,
+    image: req.file.buffer,
+    style: req.body?.style || "detailed",
+    language: req.body?.language === "km" ? "km" : "en",
+  });
+  res.json({ success: true, data: { ...data, keySource: req.gemini.source, cost: 0 } });
 });
 
 // POST /api/video/resolve  { url }
@@ -110,4 +108,45 @@ export const convertAudio = asyncHandler(async (req, res) => {
     "Cache-Control": "no-store",
   });
   res.send(out.audio);
+});
+
+// ── QR images: upload a picture, store it in the CLOUD database, QR points to its public URL ──
+import { saveQrImage, readQrImage, listQrImages, deleteQrImage } from "../services/qrImageService.js";
+
+const storageErr = (e) => {
+  const map = { STORAGE_UNAVAILABLE: [503], BAD_IMAGE: [400], IMAGE_TOO_LARGE: [413], QR_IMAGE_LIMIT: [409] };
+  if (map[e.code]) throw new AppError(map[e.code][0], e.code, e.message);
+  throw e;
+};
+
+export const uploadQrImage = asyncHandler(async (req, res) => {
+  if (!req.file?.buffer?.length) throw new AppError(400, "NO_FILE", 'Attach an image in the "image" field.');
+  let saved;
+  try { saved = await saveQrImage({ owner: req.user._id, name: req.file.originalname, buffer: req.file.buffer }); } catch (e) { storageErr(e); }
+  res.status(201).json({ success: true, data: { ...saved, path: `/qr/image/${saved.imageId}` } });
+});
+
+export const listMyQrImages = asyncHandler(async (req, res) => {
+  let data; try { data = await listQrImages(req.user._id); } catch (e) { storageErr(e); }
+  res.json({ success: true, data });
+});
+
+export const removeQrImage = asyncHandler(async (req, res) => {
+  let ok; try { ok = await deleteQrImage(req.user._id, req.params.id); } catch (e) { storageErr(e); }
+  if (!ok) throw new AppError(404, "NOT_FOUND", "Image not found.");
+  res.json({ success: true });
+});
+
+// Public: what the scanned QR opens. Served inline with a fixed raster content-type.
+export const viewQrImage = asyncHandler(async (req, res) => {
+  let img; try { img = await readQrImage(req.params.id); } catch (e) { storageErr(e); }
+  if (!img) throw new AppError(404, "NOT_FOUND", "Image not found.");
+  res.set({
+    "Content-Type": img.mimeType,
+    "X-Content-Type-Options": "nosniff",
+    "Content-Security-Policy": "default-src 'none'; img-src 'self'; sandbox",
+    "Cache-Control": "public, max-age=300",
+    "Content-Disposition": "inline",
+  });
+  res.send(img.data);
 });

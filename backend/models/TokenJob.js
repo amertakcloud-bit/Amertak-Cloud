@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose from "../lib/odm/index.js";
 
 // One paid operation (e.g. a caption job). Lets us refund exactly once if it fails.
 const schema = new mongoose.Schema(

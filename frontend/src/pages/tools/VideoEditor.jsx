@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Select from "../../components/ui/Select";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import api from "../../services/api";
 import { toolsApi } from "../../services/toolsApi";
@@ -10,6 +11,8 @@ import GeminiKeyPanel, { useGeminiAccess } from "../../components/tools/GeminiKe
 import useToolsStatus from "../../hooks/useToolsStatus";
 import Timeline from "../../components/editor/Timeline";
 import Inspector from "../../components/editor/Inspector";
+import StageOverlay from "../../components/editor/StageOverlay";
+import AiPanel from "../../components/editor/AiPanel";
 import { friendlyError } from "../../lib/errors";
 import { saveBlob as download } from "../../lib/download";
 import { RATES, tokensForBytes } from "../../lib/tokens";
@@ -17,9 +20,11 @@ import { Engine } from "../../lib/editor/engine";
 import { deleteProjectMedia, getMedia, probeMedia, putMedia } from "../../lib/editor/mediaStore";
 import { captionsFromFile, pool, translateLines, voiceClip, voiceForCue, voiceMedia } from "../../lib/editor/ai";
 import {
-  addClip, addMedia, buildSrt, cuesToCaptionClips, cuesToTimelineCaptions, duplicateClip, makeMediaClip, makeTextClip,
-  newProject, parseSrt, projectDuration, removeClip, splitClip, uid, updateClip,
+  addClip, addMedia, applyCaptionPreset, buildSrt, cuesToCaptionClips, cuesToTimelineCaptions, duplicateClip, makeMediaClip, makeTextClip,
+  newProject, parseSrt, projectDuration, removeClip, removeSilentRanges, rippleDelete, splitClip, TEXT_PRESETS, trimEnd, trimStart, uid, updateClip,
 } from "../../lib/editor/model";
+import { applyOps } from "../../lib/editor/aiOps";
+import { decodeMono, findSilences } from "../../lib/editor/silence";
 import "../../styles/tools/editor.css";
 
 const PRESETS = [
@@ -27,6 +32,41 @@ const PRESETS = [
   { id: "9:16", w: 720, h: 1280, key: "vePreset916" },
   { id: "1:1", w: 1080, h: 1080, key: "vePreset11" },
 ];
+
+const AI_EDIT_COST = 1; // tokens per AI instruction (server refunds on failure)
+
+function useNarrow(px = 900) {
+  const q = `(max-width:${px}px)`;
+  const [n, setN] = useState(() => typeof window !== "undefined" && window.matchMedia?.(q).matches);
+  useEffect(() => {
+    const m = window.matchMedia?.(q);
+    if (!m) return undefined;
+    const f = () => setN(m.matches);
+    m.addEventListener("change", f);
+    return () => m.removeEventListener("change", f);
+  }, [q]);
+  return Boolean(n);
+}
+
+// Largest box with the project's aspect ratio that fits inside the container (px).
+function useFit(ref, ratio) {
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return undefined;
+    const calc = () => {
+      const cw = el.clientWidth, ch = el.clientHeight;
+      if (!cw || !ch) return;
+      const w = Math.min(cw, ch * ratio);
+      setSize({ w: Math.floor(w), h: Math.floor(w / ratio) });
+    };
+    calc();
+    const ro = new ResizeObserver(calc);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref, ratio]);
+  return size;
+}
 
 export default function VideoEditor() {
   const { id } = useParams();
@@ -139,7 +179,12 @@ function Workspace({ id }) {
   const [time, setTime] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [zoom, setZoom] = useState(60);
-  const [tab, setTab] = useState("inspector");
+  const [tab, setTab] = useState("media");
+  const [aiHistory, setAiHistory] = useState([]);
+  const [aiBusy, setAiBusy] = useState(false);
+  const narrow = useNarrow();
+  const stage = useRef(null);
+  const fit = useFit(stage, project.width / project.height);
   const [missing, setMissing] = useState([]);
   const [save, setSave] = useState("saved"); // saved | dirty | saving | error
   const [task, setTask] = useState(null); // { label, percent }
@@ -318,16 +363,38 @@ function Workspace({ id }) {
     edit((p) => ({ ...p, captionStyle: { ...clip.style }, clips: p.clips.map((c) => (c.type === "caption" ? { ...c, style: { ...clip.style }, y: clip.y } : c)) }));
   }
 
+  function trimLeft() { if (sel && timeRef.current > sel.start && timeRef.current < sel.start + sel.dur) edit((p) => trimStart(p, sel.id, timeRef.current)); }
+  function trimRight() { if (sel && timeRef.current > sel.start && timeRef.current < sel.start + sel.dur) edit((p) => trimEnd(p, sel.id, timeRef.current)); }
+  function rippleDel() { if (selected) { edit((p) => rippleDelete(p, selected)); setSelected(null); } }
+  function addTextPreset(preset) {
+    const c = makeTextClip({ text: preset.key === "vePresetHeading" ? t("veSampleTitle") : t("veSampleText"), start: timeRef.current, style: preset.style });
+    edit((p) => addClip(p, c));
+    setSelected(c.id);
+    if (narrow) setTab("inspector");
+  }
+  const onTextEdit = useCallback((clipId, value) => edit((p) => updateClip(p, clipId, { text: value })), [edit]);
+  const applyPreset = (preset) => edit((p) => applyCaptionPreset(p, preset));
+
   /* keyboard */
   useEffect(() => {
     const onKey = (e) => {
-      if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+      if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable) return;
       const mod = e.ctrlKey || e.metaKey;
+      const k = e.key.toLowerCase();
       if (e.code === "Space") { e.preventDefault(); engine.current?.toggle(); }
-      else if (e.key === "s" && !mod) split();
-      else if (e.key === "Delete" || e.key === "Backspace") del();
-      else if (mod && e.key.toLowerCase() === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); }
-      else if (mod && e.key.toLowerCase() === "y") { e.preventDefault(); redo(); }
+      else if (k === "s" && !mod) split();
+      else if (k === "q" && !mod) trimLeft();
+      else if (k === "w" && !mod) trimRight();
+      else if (k === "d" && mod) { e.preventDefault(); dup(); }
+      else if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); e.shiftKey ? rippleDel() : del(); }
+      else if (e.key === "Escape") setSelected(null);
+      else if (mod && k === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); }
+      else if (mod && k === "y") { e.preventDefault(); redo(); }
+      else if (e.altKey && selected && e.key.startsWith("Arrow")) {
+        e.preventDefault();
+        const step = e.shiftKey ? 0.05 : 0.01, c = projRef.current.clips.find((x) => x.id === selected);
+        if (c && c.x != null) edit((p) => updateClip(p, selected, { x: c.x + (e.key === "ArrowRight" ? step : e.key === "ArrowLeft" ? -step : 0), y: c.y + (e.key === "ArrowDown" ? step : e.key === "ArrowUp" ? -step : 0) }));
+      }
       else if (e.key === "ArrowLeft") engine.current?.seek(timeRef.current - (e.shiftKey ? 1 : 0.1));
       else if (e.key === "ArrowRight") engine.current?.seek(timeRef.current + (e.shiftKey ? 1 : 0.1));
     };
@@ -431,6 +498,55 @@ function Workspace({ id }) {
     });
   }
 
+  /* ───────── AI: remove silence (free, runs in the browser) ───────── */
+  async function removeSilence() {
+    const src = source;
+    if (!src) { toast.info(t("veNeedSource")); return; }
+    await runTask(t("veTaskSilence"), async (_signal, progress) => {
+      const file = await sourceFile(src);
+      if (file.size > 150 * 1024 * 1024) throw new Error(t("veSilenceTooBig"));
+      progress(15);
+      const { samples, sampleRate } = await decodeMono(file);
+      progress(70);
+      const r = removeSilentRanges(projRef.current, src.id, findSilences(samples, sampleRate));
+      if (!r.removed) { toast.info(t("veNoSilence")); return; }
+      commit(r.project, { baseline: projRef.current });
+      engine.current?.seek(Math.min(timeRef.current, projectDuration(r.project)));
+      toast.success(t("veSilenceRemoved").replace("{n}", r.removed.toFixed(1)));
+    });
+  }
+
+  /* ───────── AI editor: plain-words instruction → validated operations ───────── */
+  async function runAi(instruction) {
+    if (!user) { toast.info(t("tokLogin")); return; }
+    if (!access.ready) { toast.info(t("keyRequired")); return; }
+    if (AI_EDIT_COST > Number(user.tokens ?? 0)) { toast.error(t("err_INSUFFICIENT_TOKENS")); return; }
+    setAiHistory((h) => [...h, { role: "user", text: instruction }]);
+    setAiBusy(true);
+    abort.current = new AbortController();
+    try {
+      const p = projRef.current;
+      const summary = {
+        width: p.width, height: p.height, duration: projectDuration(p), playhead: timeRef.current, selected,
+        clips: p.clips.map((c) => ({ id: c.id, lane: c.lane, type: c.type, start: c.start, dur: c.dur, text: c.text, name: p.media[c.mediaId]?.name })),
+      };
+      const r = await toolsApi.editorAi(instruction, summary, abort.current.signal);
+      refreshUser();
+      const res = applyOps(projRef.current, r.data.ops, { selected });
+      if (res.project !== projRef.current) commit(res.project, { baseline: projRef.current });
+      setAiHistory((h) => [...h, { role: "ai", text: r.data.message || (res.applied ? t("veAiDone").replace("{n}", String(res.applied)) : t("veAiNothing")) }]);
+      for (const a of res.actions) {
+        if (a === "generate_captions") await generateCaptions();
+        else if (a === "translate_voice") await translateToVoice();
+        else if (a === "remove_silence") await removeSilence();
+      }
+    } catch (e) {
+      if (e.code !== "ABORTED") { const m = friendlyError(e, t); setAiHistory((h) => [...h, { role: "ai", text: m, error: true }]); toast.error(m); }
+    } finally {
+      setAiBusy(false);
+    }
+  }
+
   /* ───────── export ───────── */
   async function exportVideo() {
     if (!projectDuration(projRef.current)) { toast.info(t("veEmptyProject")); return; }
@@ -462,121 +578,129 @@ function Workspace({ id }) {
   }
 
   const busy = Boolean(task);
+  const canTrim = Boolean(sel && time > sel.start && time < sel.start + sel.dur);
+  const inspector = <Inspector clip={sel} project={project} onChange={changeSel} onApplyCaptionStyle={applyCaptionStyle} t={t} />;
+  const TABS = [
+    ["media", "ri-folder-video-line", "veTab_media"],
+    ["text", "ri-text", "veTab_text"],
+    ["ai", "ri-sparkling-2-line", "veTab_ai"],
+    ...(narrow ? [["inspector", "ri-equalizer-line", "veTab_inspector"]] : []),
+  ];
+  const activeTab = !narrow && tab === "inspector" ? "media" : tab;
+  const fileInput = (props, cls, children) => (
+    <label className={cls}>{children}<input type="file" hidden {...props} /></label>
+  );
+
   return (
     <div className="ve">
-      <div className="ve-bar">
-        <button type="button" className="tk-btn ghost small" onClick={async () => { if (save === "dirty") await saveNow(); nav("/tools/video-editor"); }}><i className="ri-arrow-left-line" />{t("veBack")}</button>
+      <header className="ve-topbar">
+        <button type="button" className="ve-ibtn" onClick={async () => { if (save === "dirty") await saveNow(); nav("/tools/video-editor"); }} aria-label={t("veBack")} title={t("veBack")}><i className="ri-arrow-left-s-line" /></button>
         <input className="ve-name" value={name} maxLength={120} onChange={(e) => { setName(e.target.value); setSave("dirty"); }} aria-label={t("veProjectName")} />
         <span className={`ve-save ${save}`} role="status">{t(`veSave_${save}`)}</span>
-        <button type="button" className="tk-btn ghost small" onClick={saveNow} disabled={busy}><i className="ri-save-3-line" />{t("veSave")}</button>
-        <button type="button" className="tk-btn small" onClick={exportVideo} disabled={busy}><i className="ri-download-2-line" />{t("veExport")}</button>
-      </div>
+        <span className="ve-spacer" />
+        <button type="button" className="ve-ibtn" onClick={undo} disabled={!past.current.length} aria-label={t("veUndo")} title={`${t("veUndo")} (Ctrl+Z)`}><i className="ri-arrow-go-back-line" /></button>
+        <button type="button" className="ve-ibtn" onClick={redo} disabled={!future.current.length} aria-label={t("veRedo")} title={`${t("veRedo")} (Ctrl+Y)`}><i className="ri-arrow-go-forward-line" /></button>
+        <button type="button" className="ve-ibtn" onClick={saveNow} disabled={busy} aria-label={t("veSave")} title={t("veSave")}><i className="ri-save-3-line" /></button>
+        <button type="button" className="tk-btn small" onClick={exportVideo} disabled={busy}><i className="ri-download-2-line" /><span className="ve-lbl">{t("veExport")}</span></button>
+      </header>
 
-      <div className="ve-top">
-        <div className="ve-stage">
-          <div className="ve-canvas-wrap" style={{ aspectRatio: `${project.width} / ${project.height}` }}>
-            <canvas ref={canvas} width={project.width} height={project.height} className="ve-canvas" aria-label={t("vePreview")} />
-            {!loaded && <div className="ve-loading"><i className="ri-loader-4-line spin" /></div>}
+      <div className="ve-main">
+        <aside className="ve-left">
+          <nav className="ve-rail" role="tablist" aria-label="Editor tools">
+            {TABS.map(([k, ic, lb]) => (
+              <button key={k} role="tab" aria-selected={activeTab === k} type="button" className={activeTab === k ? "on" : ""} onClick={() => setTab(k)}>
+                <i className={ic} /><span>{t(lb)}</span>
+              </button>
+            ))}
+          </nav>
+          <div className="ve-panel">
+            {activeTab === "media" && (
+              <div className="ve-media">
+                {fileInput({ multiple: true, accept: "video/*,audio/*,image/*", onChange: (e) => { importFiles(e.target.files); e.target.value = ""; } }, "tk-btn full ve-file", <><i className="ri-add-line" />{t("veAddMedia")}</>)}
+                {mediaList.length === 0 && <p className="tk-hint">{t("veNoMedia")}</p>}
+                {mediaList.map((m) => (
+                  <div key={m.id} className="ve-mitem">
+                    <i className={m.kind === "video" ? "ri-film-line" : m.kind === "audio" ? "ri-music-2-line" : "ri-image-line"} />
+                    <span className="ve-mname" title={m.name}>{m.name}</span>
+                    {missing.includes(m.id) ? (
+                      fileInput({ accept: "video/*,audio/*,image/*", onChange: (e) => relink(m.id, e.target.files?.[0]) }, "tk-btn ghost small ve-file", t("veRelink"))
+                    ) : (
+                      <button type="button" className="tk-btn ghost small" onClick={() => addMediaAtPlayhead(m)} aria-label={t("veAddToTimeline")} title={t("veAddToTimeline")}><i className="ri-add-line" /></button>
+                    )}
+                  </div>
+                ))}
+                {missing.length > 0 && <p className="tk-hint">{t("veMissingHint")}</p>}
+              </div>
+            )}
+
+            {activeTab === "text" && (
+              <div className="ve-text">
+                <button type="button" className="tk-btn full" onClick={addText}><i className="ri-text" />{t("veAddText")}</button>
+                <div className="ve-presets">
+                  {TEXT_PRESETS.map((pr) => (
+                    <button key={pr.id} type="button" className="ve-preset" onClick={() => addTextPreset(pr)}>
+                      <span style={{ color: pr.style.color || "#fff", background: pr.style.bg || "transparent", fontWeight: pr.style.bold ? 700 : 400, fontStyle: pr.style.italic ? "italic" : "normal", fontFamily: pr.style.font === "serif" ? "serif" : undefined, textShadow: pr.style.outline ? "0 0 2px #000, 0 0 3px #000" : "none" }}>Aa</span>
+                      <em>{t(pr.key)}</em>
+                    </button>
+                  ))}
+                </div>
+                <hr className="ve-hr" />
+                {fileInput({ accept: ".srt,text/plain,application/x-subrip", onChange: (e) => { importSrt(e.target.files?.[0]); e.target.value = ""; } }, "tk-btn ghost full ve-file", <><i className="ri-file-text-line" />{t("veAddSrt")}</>)}
+                <button type="button" className="tk-btn ghost full" onClick={exportSrt}><i className="ri-download-line" />{t("veExportSrt")}</button>
+              </div>
+            )}
+
+            {activeTab === "ai" && (
+              <AiPanel t={t} user={user} status={status} access={access} busy={busy} aiBusy={aiBusy} history={aiHistory} onPrompt={runAi}
+                cost={cost} aiCost={AI_EDIT_COST} balance={Number(user?.tokens ?? 0)} source={source} sourceClips={sourceClips} setAiSource={setAiSource}
+                onGenerateCaptions={generateCaptions} onTranslate={translateToVoice} onRemoveSilence={removeSilence} onCaptionPreset={applyPreset}
+                lang={lang} setLang={setLang} voice={voice} setVoice={setVoice} orig={orig} setOrig={setOrig} project={project} />
+            )}
+
+            {activeTab === "inspector" && inspector}
+          </div>
+        </aside>
+
+        <section className="ve-center">
+          <div className="ve-stage" ref={stage}>
+            <div className="ve-canvas-wrap" style={{ width: fit.w || undefined, height: fit.h || undefined, aspectRatio: `${project.width} / ${project.height}` }}>
+              <canvas ref={canvas} width={project.width} height={project.height} className="ve-canvas" aria-label={t("vePreview")} />
+              {loaded && (
+                <StageOverlay engine={engine} project={project} selected={selected} time={time} t={t}
+                  onSelect={setSelected} onPreview={onPreview} onCommit={onCommit} onTextEdit={onTextEdit} />
+              )}
+              {!loaded && <div className="ve-loading"><i className="ri-loader-4-line spin" /></div>}
+            </div>
           </div>
           <div className="ve-transport">
-            <button type="button" className="tk-btn small" onClick={() => engine.current?.toggle()} disabled={busy || !duration} aria-label={playing ? t("vePause") : t("vePlay")}>
-              <i className={playing ? "ri-pause-fill" : "ri-play-fill"} />{playing ? t("vePause") : t("vePlay")}
+            <button type="button" className="ve-ibtn" onClick={() => engine.current?.seek(0)} aria-label={t("veToStart")}><i className="ri-skip-back-fill" /></button>
+            <button type="button" className="ve-play" onClick={() => engine.current?.toggle()} disabled={busy || !duration} aria-label={playing ? t("vePause") : t("vePlay")}>
+              <i className={playing ? "ri-pause-fill" : "ri-play-fill"} />
             </button>
-            <button type="button" className="tk-btn ghost small" onClick={() => engine.current?.seek(0)} aria-label={t("veToStart")}><i className="ri-skip-back-fill" /></button>
             <span className="ve-time">{fmtT(time)} / {fmtT(duration)}</span>
           </div>
-        </div>
+        </section>
 
-        <div className="ve-side tk-card">
-          <div className="tk-seg" role="tablist">
-            {["inspector", "media", "ai"].map((k) => (
-              <button key={k} role="tab" aria-selected={tab === k} type="button" className={tab === k ? "active" : ""} onClick={() => setTab(k)}>{t(`veTab_${k}`)}</button>
-            ))}
-          </div>
-
-          {tab === "inspector" && <Inspector clip={sel} project={project} onChange={changeSel} onApplyCaptionStyle={applyCaptionStyle} t={t} />}
-
-          {tab === "media" && (
-            <div className="ve-media">
-              <label className="tk-btn small ve-file"><i className="ri-add-line" />{t("veAddMedia")}
-                <input type="file" hidden multiple accept="video/*,audio/*,image/*" onChange={(e) => { importFiles(e.target.files); e.target.value = ""; }} />
-              </label>
-              {mediaList.length === 0 && <p className="tk-hint">{t("veNoMedia")}</p>}
-              {mediaList.map((m) => (
-                <div key={m.id} className="ve-mitem">
-                  <i className={m.kind === "video" ? "ri-film-line" : m.kind === "audio" ? "ri-music-2-line" : "ri-image-line"} />
-                  <span className="ve-mname" title={m.name}>{m.name}</span>
-                  {missing.includes(m.id) ? (
-                    <label className="tk-btn ghost small ve-file">{t("veRelink")}<input type="file" hidden accept="video/*,audio/*,image/*" onChange={(e) => relink(m.id, e.target.files?.[0])} /></label>
-                  ) : (
-                    <button type="button" className="tk-btn ghost small" onClick={() => addMediaAtPlayhead(m)} aria-label={t("veAddToTimeline")}><i className="ri-add-line" /></button>
-                  )}
-                </div>
-              ))}
-              {missing.length > 0 && <p className="tk-hint">{t("veMissingHint")}</p>}
-            </div>
-          )}
-
-          {tab === "ai" && (
-            <div className="ve-ai">
-              <GeminiKeyPanel status={status} access={access} />
-              <label className="ve-field"><span>{t("veAiSource")}</span>
-                <select className="tk-input" value={source?.id || ""} onChange={(e) => setAiSource(e.target.value)} disabled={!sourceClips.length}>
-                  {sourceClips.length === 0 && <option value="">{t("veNeedSource")}</option>}
-                  {sourceClips.map((c) => <option key={c.id} value={c.id}>{project.media[c.mediaId]?.name || c.type}</option>)}
-                </select>
-              </label>
-              <div className="tk-hint"><i className="ri-coin-line" /> {t("tokCost")}: <b>{source ? cost : "—"}</b> {t("tokUnit")} · {t("tokBalance")}: <b>{Number(user?.tokens ?? 0)}</b> ({t("tokPerMB").replace("{n}", String(RATES.captionPerMB))})</div>
-              <button type="button" className="tk-btn full" disabled={busy || !source} onClick={generateCaptions}><i className="ri-closed-captioning-line" />{t("veGenCaptions")}</button>
-
-              <hr className="ve-hr" />
-              <div className="ve-title">{t("veTranslateTitle")}</div>
-              <p className="tk-hint">{t("veTranslateHint")}</p>
-              <label className="ve-field"><span>{t("veFrom")}</span>
-                <select className="tk-input" value={lang} onChange={(e) => setLang(e.target.value)}>
-                  <option value="auto">{t("veLangAuto")}</option><option value="zh">中文 (Chinese)</option><option value="en">English</option>
-                </select>
-              </label>
-              <label className="ve-field"><span>{t("veVoice")}</span>
-                <div className="tk-seg">
-                  <button type="button" className={voice === "km-KH-PisethNeural" ? "active" : ""} onClick={() => setVoice("km-KH-PisethNeural")}>Piseth</button>
-                  <button type="button" className={voice === "km-KH-SreymomNeural" ? "active" : ""} onClick={() => setVoice("km-KH-SreymomNeural")}>Sreymom</button>
-                </div>
-              </label>
-              <label className="ve-field"><span>{t("veOriginalAudio")}</span>
-                <select className="tk-input" value={orig} onChange={(e) => setOrig(e.target.value)}>
-                  <option value="duck">{t("veOrigDuck")}</option><option value="mute">{t("veOrigMute")}</option><option value="keep">{t("veOrigKeep")}</option>
-                </select>
-              </label>
-              <button type="button" className="tk-btn full" disabled={busy || !source} onClick={translateToVoice}><i className="ri-translate-2" />{t("veTranslateBtn")}</button>
-            </div>
-          )}
-        </div>
+        {!narrow && <aside className="ve-right"><div className="ve-right-h">{t("veTab_inspector")}</div>{inspector}</aside>}
       </div>
 
-      <div className="ve-tools">
-        <label className="tk-btn ghost small ve-file"><i className="ri-image-add-line" />{t("veAddMedia")}
-          <input type="file" hidden multiple accept="video/*,audio/*,image/*" onChange={(e) => { importFiles(e.target.files); e.target.value = ""; }} />
-        </label>
-        <button type="button" className="tk-btn ghost small" onClick={addText}><i className="ri-text" />{t("veAddText")}</button>
-        <label className="tk-btn ghost small ve-file"><i className="ri-file-text-line" />{t("veAddSrt")}
-          <input type="file" hidden accept=".srt,text/plain,application/x-subrip" onChange={(e) => { importSrt(e.target.files?.[0]); e.target.value = ""; }} />
-        </label>
-        <button type="button" className="tk-btn ghost small" onClick={exportSrt}><i className="ri-download-line" />.srt</button>
-        <span className="ve-sep" />
-        <button type="button" className="tk-btn ghost small" onClick={split} aria-label={t("veSplit")}><i className="ri-scissors-cut-line" /><span className="ve-lbl">{t("veSplit")}</span></button>
-        <button type="button" className="tk-btn ghost small" onClick={dup} disabled={!selected} aria-label={t("veDuplicate")}><i className="ri-file-copy-line" /></button>
-        <button type="button" className="tk-btn ghost small" onClick={del} disabled={!selected} aria-label={t("delete")}><i className="ri-delete-bin-line" /></button>
-        <button type="button" className="tk-btn ghost small" onClick={undo} disabled={!past.current.length} aria-label={t("veUndo")}><i className="ri-arrow-go-back-line" /></button>
-        <button type="button" className="tk-btn ghost small" onClick={redo} disabled={!future.current.length} aria-label={t("veRedo")}><i className="ri-arrow-go-forward-line" /></button>
-        <span className="ve-sep" />
-        <i className="ri-zoom-out-line" aria-hidden="true" />
-        <input type="range" min="15" max="240" step="5" value={zoom} onChange={(e) => setZoom(Number(e.target.value))} aria-label={t("veZoom")} className="ve-zoom" />
-        <i className="ri-zoom-in-line" aria-hidden="true" />
+      <div className="ve-bottom">
+        <div className="ve-tools">
+          <button type="button" className="ve-tool" onClick={split} title={`${t("veSplit")} (S)`}><i className="ri-scissors-cut-line" /><span>{t("veSplit")}</span></button>
+          <button type="button" className="ve-tool" onClick={trimLeft} disabled={!canTrim} title={`${t("veTrimLeft")} (Q)`}><i className="ri-skip-left-line" /><span>{t("veTrimLeft")}</span></button>
+          <button type="button" className="ve-tool" onClick={trimRight} disabled={!canTrim} title={`${t("veTrimRight")} (W)`}><i className="ri-skip-right-line" /><span>{t("veTrimRight")}</span></button>
+          <span className="ve-sep" />
+          <button type="button" className="ve-tool" onClick={dup} disabled={!selected} title={`${t("veDuplicate")} (Ctrl+D)`}><i className="ri-file-copy-line" /><span>{t("veDuplicate")}</span></button>
+          <button type="button" className="ve-tool" onClick={del} disabled={!selected} title={`${t("delete")} (Del)`}><i className="ri-delete-bin-line" /><span>{t("delete")}</span></button>
+          <button type="button" className="ve-tool" onClick={rippleDel} disabled={!selected} title={`${t("veRippleDelete")} (Shift+Del)`}><i className="ri-eraser-line" /><span>{t("veRippleDelete")}</span></button>
+          <span className="ve-spacer" />
+          <i className="ri-zoom-out-line" aria-hidden="true" />
+          <input type="range" min="15" max="240" step="5" value={zoom} onChange={(e) => setZoom(Number(e.target.value))} aria-label={t("veZoom")} className="ve-zoom" />
+          <i className="ri-zoom-in-line" aria-hidden="true" />
+        </div>
+        <Timeline project={project} time={time} zoom={zoom} selected={selected} t={t}
+          onSelect={setSelected} onSeek={(s) => engine.current?.seek(s)} onPreview={onPreview} onCommit={onCommit} />
       </div>
-
-      <Timeline project={project} time={time} zoom={zoom} selected={selected} t={t}
-        onSelect={setSelected} onSeek={(s) => engine.current?.seek(s)} onPreview={onPreview} onCommit={onCommit} />
 
       {task && (
         <div className="ve-task" role="status" aria-live="polite">

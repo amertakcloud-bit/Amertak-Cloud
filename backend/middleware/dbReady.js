@@ -10,7 +10,7 @@ export const dbReady = asyncHandler(async (_req, _res, next) => {
   try {
     await ensureDb();
   } catch (err) {
-    console.error("[MongoDB] connect failed:", err.message);
+    console.error("[DB] connect failed:", err.message);
     throw new AppError(503, "DATABASE_UNAVAILABLE", "The database is unreachable right now. Please try again shortly.");
   }
   next();

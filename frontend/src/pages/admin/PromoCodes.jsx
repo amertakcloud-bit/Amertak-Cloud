@@ -108,12 +108,12 @@ export default function PromoCodes() {
           </div>
           {codes.map((p) => (
             <div key={p._id} className="admin-table-row">
-              <strong>{p.code}</strong>
-              <span>{p.type}</span>
-              <span>
+              <strong className="adm-name">{p.code}</strong>
+              <span data-label="Type">{p.type}</span>
+              <span data-label="Value">
                 {p.type === "fixed" ? `$${p.value}` : `${p.value}%`}
               </span>
-              <span>
+              <span data-label="Status">
                 <button
                   className={`admin-toggle-btn ${p.isActive ? "active" : "inactive"}`}
                   onClick={() => handleToggleActive(p._id, p.isActive)}
@@ -121,10 +121,10 @@ export default function PromoCodes() {
                   {p.isActive ? "Active" : "Inactive"}
                 </button>
               </span>
-              <span>
+              <span data-label="Used / Max">
                 {p.usedCount} / {p.maxUsers}
               </span>
-              <span>
+              <span data-label="Expires">
                 {p.expiresAt ? new Date(p.expiresAt).toLocaleDateString() : ""}
               </span>
               <span>

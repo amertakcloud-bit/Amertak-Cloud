@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose from "../lib/odm/index.js";
 
 // Payment
 // Receipt of a KHQR payment created through our API.

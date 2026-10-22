@@ -17,7 +17,7 @@ export const MIN_DUR = 0.1;
 export const IMAGE_DEFAULT_DUR = 5;
 export const TEXT_DEFAULT_DUR = 4;
 
-export const DEFAULT_TEXT_STYLE = { size: 7, color: "#ffffff", bg: "rgba(0,0,0,0)", bold: true, outline: true, align: "center" };
+export const DEFAULT_TEXT_STYLE = { size: 7, color: "#ffffff", bg: "rgba(0,0,0,0)", bold: true, italic: false, outline: true, shadow: false, align: "center", font: "sans" };
 export const DEFAULT_CAPTION_STYLE = { size: 5.2, color: "#ffffff", bg: "rgba(0,0,0,0.55)", bold: true, outline: false, align: "center" };
 
 let counter = 0;
@@ -183,4 +183,101 @@ export function cuesToTimelineCaptions(cues, style) {
 export function ttsRateFor(naturalSec, slotSec) {
   if (!(slotSec > 0) || !(naturalSec > slotSec * 1.02)) return 0;
   return clamp(Math.ceil((naturalSec / slotSec - 1) * 100), 0, 100);
+}
+
+// ── real-editor operations ──
+
+// Remove a clip and close the gap: later clips on the same lane move left by its duration.
+export function rippleDelete(p, id) {
+  const c = p.clips.find((x) => x.id === id);
+  if (!c) return p;
+  const end = clipEnd(c);
+  return {
+    ...p,
+    clips: p.clips.filter((x) => x.id !== id).map((x) => (x.lane === c.lane && x.start >= end - 1e-6 ? { ...x, start: round3(Math.max(0, x.start - c.dur)) } : x)),
+  };
+}
+
+// Cut the part [a, b] out of a clip (split twice, drop the middle, close the gap on that lane).
+export function cutRange(p, id, a, b) {
+  const c = p.clips.find((x) => x.id === id);
+  if (!c) return p;
+  const lo = clamp(Math.min(a, b), c.start, clipEnd(c)), hi = clamp(Math.max(a, b), c.start, clipEnd(c));
+  if (hi - lo < MIN_DUR) return p;
+  let cur = p, mid = id;
+  if (lo > c.start + MIN_DUR) { const r = splitClip(cur, id, lo); if (r.ids) { cur = r.project; mid = r.ids[1]; } }
+  const m = cur.clips.find((x) => x.id === mid);
+  if (hi < clipEnd(m) - MIN_DUR) { const r = splitClip(cur, mid, hi); if (r.ids) cur = r.project; }
+  return rippleDelete(cur, mid);
+}
+
+// Rotated-rectangle geometry (project pixels). box = { cx, cy, w, h, rot(deg) }.
+export function toLocal(box, px, py) {
+  const a = -((box.rot || 0) * Math.PI) / 180, dx = px - box.cx, dy = py - box.cy;
+  return { x: dx * Math.cos(a) - dy * Math.sin(a), y: dx * Math.sin(a) + dy * Math.cos(a) };
+}
+export function pointInBox(box, px, py, pad = 0) {
+  const l = toLocal(box, px, py);
+  return Math.abs(l.x) <= box.w / 2 + pad && Math.abs(l.y) <= box.h / 2 + pad;
+}
+export function boxCorners(box) {
+  const a = ((box.rot || 0) * Math.PI) / 180, cos = Math.cos(a), sin = Math.sin(a);
+  return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sy]) => {
+    const x = (sx * box.w) / 2, y = (sy * box.h) / 2;
+    return { x: box.cx + x * cos - y * sin, y: box.cy + x * sin + y * cos };
+  });
+}
+// Top-most clip under a point. `boxes` = [{ clip, box }] in draw order (bottom → top).
+export function hitTest(boxes, px, py) {
+  for (let i = boxes.length - 1; i >= 0; i--) if (pointInBox(boxes[i].box, px, py, 4)) return boxes[i].clip;
+  return null;
+}
+
+// Fade in/out multiplier at timeline time t.
+export function fadeAlpha(c, t) {
+  let a = 1;
+  const into = t - c.start, left = clipEnd(c) - t;
+  if (c.fadeIn > 0 && into < c.fadeIn) a = Math.min(a, Math.max(0, into / c.fadeIn));
+  if (c.fadeOut > 0 && left < c.fadeOut) a = Math.min(a, Math.max(0, left / c.fadeOut));
+  return a;
+}
+
+// ── silence removal (pure: takes ranges of silence in SOURCE seconds) ──
+// Cuts every silent range out of one media clip and closes the gaps (clips to the right of it, on all lanes, shift left).
+export function removeSilentRanges(p, id, silences) {
+  const c0 = p.clips.find((x) => x.id === id);
+  if (!c0 || !silences?.length) return { project: p, removed: 0 };
+  let cur = p, removed = 0;
+  const lo = c0.offset || 0, hi = lo + c0.dur;
+  // right-to-left so earlier timeline positions stay valid
+  const ranges = silences.map(([s, e]) => [Math.max(lo, s), Math.min(hi, e)]).filter(([s, e]) => e - s >= 0.2).sort((a, b) => b[0] - a[0]);
+  for (const [s, e] of ranges) {
+    const a = c0.start + (s - lo), b = c0.start + (e - lo);
+    const next = cutRange(cur, id, a, b);
+    // shift everything after the cut on the other lanes too, so captions/voices stay in sync
+    const gap = b - a;
+    cur = { ...next, clips: next.clips.map((x) => (x.lane !== c0.lane && x.start >= b - 1e-6 ? { ...x, start: round3(Math.max(0, x.start - gap)) } : x)) };
+    if (next !== cur) removed += gap;
+  }
+  return { project: cur, removed: round3(removed) };
+}
+
+// ── style presets (Text tab + AI quick actions) ──
+export const TEXT_PRESETS = [
+  { id: "heading", key: "vePresetHeading", text: "Title", style: { size: 11, bold: true, outline: true, shadow: true } },
+  { id: "subtitle", key: "vePresetSubtitle", text: "Subtitle", style: { size: 6, bold: false, outline: true } },
+  { id: "yellow", key: "vePresetYellow", text: "Text", style: { size: 8, color: "#facc15", bold: true, outline: true, outlineColor: "#000000" } },
+  { id: "box", key: "vePresetBox", text: "Text", style: { size: 6.5, color: "#111111", bg: "rgba(255,255,255,0.85)", bold: true, outline: false } },
+  { id: "neon", key: "vePresetNeon", text: "Text", style: { size: 8, color: "#ffffff", bg: "rgba(220,36,100,0.85)", bold: true, outline: false } },
+  { id: "serif", key: "vePresetSerif", text: "Text", style: { size: 8, font: "serif", italic: true, bold: false, outline: false, shadow: true } },
+];
+export const CAPTION_PRESETS = [
+  { id: "classic", key: "veCapClassic", style: { size: 5.2, color: "#ffffff", bg: "rgba(0,0,0,0.55)", bold: true, outline: false, shadow: false, font: "sans" }, y: 0.88 },
+  { id: "yellow", key: "veCapYellow", style: { size: 5.8, color: "#facc15", bg: "rgba(0,0,0,0)", bold: true, outline: true, outlineColor: "#000000", shadow: false, font: "sans" }, y: 0.86 },
+  { id: "pink", key: "veCapPink", style: { size: 5.6, color: "#ffffff", bg: "rgba(220,36,100,0.85)", bold: true, outline: false, shadow: false, font: "sans" }, y: 0.86 },
+  { id: "minimal", key: "veCapMinimal", style: { size: 5, color: "#ffffff", bg: "rgba(0,0,0,0)", bold: false, outline: true, shadow: true, font: "sans" }, y: 0.9 },
+  { id: "center", key: "veCapCenter", style: { size: 7.5, color: "#ffffff", bg: "rgba(0,0,0,0)", bold: true, outline: true, shadow: true, font: "display" }, y: 0.5 },
+];
+export function applyCaptionPreset(p, preset) {
+  return { ...p, captionStyle: { ...preset.style }, clips: p.clips.map((c) => (c.type === "caption" ? { ...c, style: { ...preset.style }, y: preset.y } : c)) };
 }

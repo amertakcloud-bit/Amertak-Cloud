@@ -1,6 +1,8 @@
 import { AppError } from "../lib/AppError.js";
 import { asyncHandler } from "../middleware/errorMiddleware.js";
 import { deps as geminiDeps, extractText, getModels, mapGeminiError, parseModelJson } from "../lib/geminiClient.js";
+import { withCharge } from "../lib/billing.js";
+import { planEdits } from "../services/editorAi.js";
 import { createProject, deleteProject, getProject, listProjects, updateProject } from "../services/editorProjects.js";
 
 export const list = asyncHandler(async (req, res) => {
@@ -62,4 +64,16 @@ export const translate = asyncHandler(async (req, res) => {
   if (clean.join("").length > MAX_TRANSLATE_CHARS) throw new AppError(413, "TEXT_TOO_LONG", "That is too much text to translate at once.");
   const out = await translateToKhmer({ apiKey: req.gemini.key, lines: clean, from: req.body?.from });
   res.json({ success: true, data: { lines: out, keySource: req.gemini.source } });
+});
+
+export const AI_EDIT_COST = 1; // tokens per AI instruction (refunded automatically if it fails)
+
+// POST /api/editor/ai  { instruction, project: { width,height,duration,playhead,selected,clips[] } }
+export const aiEdit = asyncHandler(async (req, res) => {
+  const { result, balance } = await withCharge(
+    req.user._id, AI_EDIT_COST,
+    () => planEdits({ apiKey: req.gemini.key, instruction: req.body?.instruction, project: req.body?.project }),
+    "aiedit"
+  );
+  res.json({ success: true, data: { ...result, cost: AI_EDIT_COST, tokens: balance, keySource: req.gemini.source } });
 });

@@ -1,63 +1,31 @@
-
-
-footer {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    position: relative;
-    margin-top: 1rem;
-    width: 100%;
-    padding: 1rem;
-    align-items: center;
-    justify-content: center;
-    
-    .brand {
-        display: flex;
-        align-items: center;
-        gap: .5rem;
-
-        span {
-            font-weight: 900;
-        }
-    }
+/* Footer — clean, responsive */
+.site-footer {
+  margin: 24px 0 0;
+  padding: 28px clamp(16px, 4vw, 28px) 16px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
 }
-
-.footer-info {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(30%, 1fr));
-    justify-content: center;
-
-    .about-us, .fast-link, .social {
-        gap: 10px;
-    }
-
-    span {
-        font-size: 20px;
-        font-weight: 500;
-        display: flex;
-        align-items: center;
-        gap: .5rem;
-        color: var(--text);
-    }
-
-    a {
-        display: block;
-        gap: 1rem;
-        padding: .5rem;
-        color: var(--text-muted);
-        
-        i {
-            font-size: 22px;
-        }
-    }
+.sf-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr;
+  gap: 28px;
+  max-width: 1100px;
+  margin: 0 auto;
 }
-
-.f-text {
-    text-align: center;
+.sf-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.sf-col h4 { margin: 0 0 4px; font-size: .95rem; font-weight: 700; color: var(--text); }
+.sf-col a { color: var(--text-muted); text-decoration: none; font-size: .92rem; width: fit-content; transition: color .15s, transform .15s; }
+.sf-col a:hover { color: var(--primary); transform: translateX(2px); }
+.sf-brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 1.1rem; }
+.sf-about p { margin: 0; color: var(--text-muted); font-size: .92rem; line-height: 1.6; max-width: 38ch; }
+.sf-social { display: flex; flex-direction: column; gap: 8px; }
+.sf-social a { display: inline-flex; align-items: center; gap: 8px; }
+.sf-social i { font-size: 1.15rem; color: var(--primary); }
+.sf-bottom { max-width: 1100px; margin: 22px auto 0; padding-top: 14px; border-top: 1px solid var(--border); text-align: center; color: var(--text-muted); font-size: .82rem; }
+@media (max-width: 760px) {
+  .sf-grid { grid-template-columns: 1fr 1fr; }
+  .sf-about { grid-column: 1 / -1; }
 }
-
-@media (max-width: 450px) {
-    .footer-info {
-        display: block;
-        text-align: start;
-    }
+@media (max-width: 440px) {
+  .sf-grid { grid-template-columns: 1fr; gap: 20px; }
 }

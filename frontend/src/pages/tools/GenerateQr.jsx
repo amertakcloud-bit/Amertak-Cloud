@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import Select from "../../components/ui/Select";
 import ToolShell from "../../components/tools/ToolShell";
 import { useLanguage } from "../../context/LanguageContext";
 import { useFeedback } from "../../components/ui/Feedback";
 import { toolsApi } from "../../services/toolsApi";
 import { friendlyError } from "../../lib/errors";
 import { saveBlob } from "../../lib/download";
+import { useAuth } from "../../context/AuthContext";
+import { Link } from "react-router-dom";
 
 const TYPES = [
   { id: "url", icon: "ri-link", key: "qrUrl" },
@@ -14,6 +17,7 @@ const TYPES = [
   { id: "phone", icon: "ri-phone-line", key: "qrPhone" },
   { id: "sms", icon: "ri-message-2-line", key: "qrSms" },
   { id: "vcard", icon: "ri-contacts-book-line", key: "qrVcard" },
+  { id: "image", icon: "ri-image-add-line", key: "qrImage" },
 ];
 
 const EMPTY = {
@@ -24,15 +28,18 @@ const EMPTY = {
   phone: { phone: "" },
   sms: { phone: "", message: "" },
   vcard: { name: "", org: "", title: "", phone: "", email: "", website: "" },
+  image: { url: "", name: "" },
 };
 
 // Is there enough data to ask the server for a code? (the server does the real validation)
 const hasData = (type, d) =>
-  ({ url: d.url, text: d.text, wifi: d.ssid, email: d.to, phone: d.phone, sms: d.phone, vcard: d.name }[type] || "").trim().length > 0;
+  ({ url: d.url, text: d.text, wifi: d.ssid, email: d.to, phone: d.phone, sms: d.phone, vcard: d.name, image: d.url }[type] || "").trim().length > 0;
 
 export default function GenerateQr() {
   const { t } = useLanguage();
   const { toast } = useFeedback();
+  const { user } = useAuth();
+  const [uploading, setUploading] = useState(false);
   const [type, setType] = useState("url");
   const [data, setData] = useState(EMPTY);
   const [opts, setOpts] = useState({ size: 512, margin: 2, ecc: "M", dark: "#000000", light: "#ffffff", transparent: false });
@@ -42,6 +49,19 @@ export default function GenerateQr() {
   const set = (patch) => setData((d) => ({ ...d, [type]: { ...d[type], ...patch } }));
   const cur = data[type];
   const ready = hasData(type, cur);
+  const apiType = type === "image" ? "url" : type; // an uploaded image is a QR that opens its stored URL
+
+  async function uploadImage(file) {
+    if (!file) return;
+    if (!/^image\/(png|jpeg|gif|webp)$/.test(file.type)) { toast.error(t("qrImgType")); return; }
+    if (file.size > 3 * 1024 * 1024) { toast.error(t("qrImgBig")); return; }
+    setUploading(true);
+    try {
+      const r = await toolsApi.qrImageUpload(file);
+      set({ url: toolsApi.qrImageUrl(r.data.path), name: file.name });
+      toast.success(t("qrImgOk"));
+    } catch (e) { toast.error(friendlyError(e, t)); } finally { setUploading(false); }
+  }
 
   // Live preview (debounced) — always rendered by the backend, so what you see is what you download.
   useEffect(() => {
@@ -50,7 +70,7 @@ export default function GenerateQr() {
     setPreview((p) => ({ ...p, loading: true }));
     const timer = setTimeout(async () => {
       try {
-        const { blob } = await toolsApi.qr({ type, data: cur, options: { ...opts, format: "png" } });
+        const { blob } = await toolsApi.qr({ type: apiType, data: cur, options: { ...opts, format: "png" } });
         if (id !== seq.current) return;
         const url = URL.createObjectURL(blob);
         setPreview((p) => { if (p.url) URL.revokeObjectURL(p.url); return { url, loading: false, error: "" }; });
@@ -67,7 +87,7 @@ export default function GenerateQr() {
 
   async function download(format) {
     try {
-      const { blob } = await toolsApi.qr({ type, data: cur, options: { ...opts, format } });
+      const { blob } = await toolsApi.qr({ type: apiType, data: cur, options: { ...opts, format } });
       saveBlob(blob, `qrcode.${format}`);
       toast.success(t("downloaded"));
     } catch (e) {
@@ -77,7 +97,7 @@ export default function GenerateQr() {
 
   async function copy() {
     try {
-      const { blob } = await toolsApi.qr({ type, data: cur, options: { ...opts, format: "png" } });
+      const { blob } = await toolsApi.qr({ type: apiType, data: cur, options: { ...opts, format: "png" } });
       await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
       toast.success(t("copied"));
     } catch {
@@ -93,6 +113,18 @@ export default function GenerateQr() {
   const form = useMemo(() => {
     switch (type) {
       case "url": return <div>{lbl("qrUrl")}{field("url", { placeholder: "https://example.com", inputMode: "url" })}</div>;
+      case "image": return !user ? (
+        <div className="tk-alert tk-alert-info"><i className="ri-lock-line" /> {t("qrImgLogin")} <Link to="/login">{t("login")}</Link></div>
+      ) : (
+        <div style={{ display: "grid", gap: 10 }}>
+          <label className="tk-btn full" style={{ cursor: uploading ? "wait" : "pointer" }}>
+            <i className={uploading ? "ri-loader-4-line spin" : "ri-upload-2-line"} />{uploading ? t("qrImgUploading") : t("qrImgPick")}
+            <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" hidden disabled={uploading} onChange={(e) => { uploadImage(e.target.files?.[0]); e.target.value = ""; }} />
+          </label>
+          {cur.url && <div className="tk-hint"><i className="ri-check-line" /> {cur.name} — <a href={cur.url} target="_blank" rel="noreferrer">{t("qrImgOpen")}</a></div>}
+          <div className="tk-hint">{t("qrImgHint")}</div>
+        </div>
+      );
       case "text": return <div>{lbl("qrText")}<textarea className="tk-textarea" value={cur.text} onChange={(e) => set({ text: e.target.value })} placeholder={t("qrTextPh")} maxLength={1500} /><div className="tk-hint" style={{ textAlign: "right" }}>{cur.text.length} / 1500</div></div>;
       case "wifi": return (
         <div style={{ display: "grid", gap: 12 }}>
@@ -100,9 +132,9 @@ export default function GenerateQr() {
           <div className="tk-fields">
             <div>{lbl("password")}{field("password", { type: "text", disabled: cur.encryption === "nopass", maxLength: 63 })}</div>
             <div>{lbl("qrSecurity")}
-              <select className="tk-select" value={cur.encryption} onChange={(e) => set({ encryption: e.target.value })}>
+              <Select value={cur.encryption} onChange={(e) => set({ encryption: e.target.value })}>
                 <option value="WPA">WPA / WPA2 / WPA3</option><option value="WEP">WEP</option><option value="nopass">{t("qrNoPass")}</option>
-              </select>
+              </Select>
             </div>
           </div>
           <label className="tk-hint" style={{ display: "flex", gap: 8, alignItems: "center" }}><input type="checkbox" checked={cur.hidden} onChange={(e) => set({ hidden: e.target.checked })} />{t("qrHidden")}</label>
@@ -128,7 +160,7 @@ export default function GenerateQr() {
       default: return null;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [type, cur, t]);
+  }, [type, cur, t, user, uploading]); // eslint-disable-line
 
   return (
     <ToolShell icon="ri-qr-code-line" titleKey="GenerateQr" subKey="qrSub">
@@ -152,9 +184,9 @@ export default function GenerateQr() {
               <div>{lbl("qrSize")} <span className="tk-hint">{opts.size}px</span><input className="tk-range" type="range" min="128" max="2048" step="64" value={opts.size} onChange={(e) => setOpts({ ...opts, size: +e.target.value })} /></div>
               <div>{lbl("qrMargin")} <span className="tk-hint">{opts.margin}</span><input className="tk-range" type="range" min="0" max="10" value={opts.margin} onChange={(e) => setOpts({ ...opts, margin: +e.target.value })} /></div>
               <div>{lbl("qrEcc")}
-                <select className="tk-select" value={opts.ecc} onChange={(e) => setOpts({ ...opts, ecc: e.target.value })}>
+                <Select value={opts.ecc} onChange={(e) => setOpts({ ...opts, ecc: e.target.value })}>
                   <option value="L">L · 7%</option><option value="M">M · 15%</option><option value="Q">Q · 25%</option><option value="H">H · 30%</option>
-                </select>
+                </Select>
               </div>
               <label className="tk-hint" style={{ display: "flex", gap: 8, alignItems: "center" }}><input type="checkbox" checked={opts.transparent} onChange={(e) => setOpts({ ...opts, transparent: e.target.checked })} />{t("qrTransparent")}</label>
             </div>

@@ -31,7 +31,7 @@ export const en = {
   keySaved: "API key verified.", keyRemember: "Keep it for this browser tab only", keyGet: "Get a free key in Google AI Studio",
 
   // QR
-  qrSub: "Create QR codes for links, Wi-Fi, contacts and more.", qrType: "QR type", qrUrl: "Link", qrText: "Text", qrWifi: "Wi-Fi", qrEmail: "Email",
+  qrSub: "Create QR codes for links, Wi-Fi, contacts and more.", qrType: "QR type", qrImage: "Image", qrImgPick: "Choose an image", qrImgUploading: "Uploading…", qrImgOk: "Image stored. Your QR is ready.", qrImgType: "Use a PNG, JPG, GIF or WebP image.", qrImgBig: "Image must be 3 MB or smaller.", qrImgLogin: "Log in to upload an image for your QR code.", qrImgOpen: "open", qrImgHint: "The image is stored in your cloud storage; scanning the QR opens it.", qrUrl: "Link", qrText: "Text", qrWifi: "Wi-Fi", qrEmail: "Email",
   qrPhone: "Phone", qrSms: "SMS", qrVcard: "Contact", qrTextPh: "Type any text…", qrSsid: "Network name (SSID)", qrSecurity: "Security",
   qrNoPass: "No password", qrHidden: "Hidden network", qrSubject: "Subject", qrBody: "Message", qrMessage: "Message", qrOrg: "Company",
   qrJob: "Job title", qrWebsite: "Website", qrStyle: "Colours & size", qrForeground: "QR colour", qrBackground: "Background", qrSize: "Size",
@@ -41,7 +41,7 @@ export const en = {
   // Image → prompt
   ipSub: "Upload an image and get a ready-to-use prompt for AI image generators.", ipDropHint: "PNG, JPG or WebP — large photos are resized automatically",
   ipBadType: "Please choose a PNG, JPG or WebP image.", ipStyle: "Prompt style", ipDetailed: "Detailed", ipMidjourney: "Midjourney", ipSd: "Stable Diffusion", ipShort: "Short",
-  ipGenerate: "Generate prompt", ipWorking: "Analysing image…", ipDone: "Prompt ready.", ipPrompt: "Prompt", ipNegative: "Negative prompt", ipModel: "Model",
+  ipGenerate: "Generate prompt", ipWorking: "Analysing image…", ipDone: "Prompt ready.", ipFree: "Free tool — no tokens are used.", ipPrompt: "Prompt", ipNegative: "Negative prompt", ipModel: "Model",
   ipEmpty: "Your prompt appears here.", ipPreviewAlt: "Selected image",
 
   // Video downloader
@@ -56,7 +56,7 @@ export const en = {
   eaBigFile: "This file is over {mb} MB, so it will be converted in your browser as WAV.", eaWavOnly: "Files over {mb} MB are converted in your browser and can only be saved as WAV.",
 
   // SRT
-  srtSub: "Khmer audio or video → editable subtitles with real word-level timestamps.", srtDropHint: "MP3, WAV, M4A, MP4, WebM… (up to 60 minutes)",
+  srtSub: "Khmer audio or video → editable subtitles with real word-level timestamps.", srtDropHint: "MP3, WAV, M4A, MP4, WebM… (up to 60 minutes)", srtLinkLabel: "…or paste a TikTok / Pinterest link", srtLinkBtn: "Fetch from link", srtLinkFetching: "Fetching…", srtLinkBad: "Enter a full link starting with https://", srtLinkNoMedia: "No audio or video was found at that link.", srtLinkFail: "Could not download that link. Try again.", srtLinkOk: "Link loaded. Press Generate.",
   srtSettings: "Subtitle settings", srtMaxChars: "Characters per line", srtMaxLines: "Lines per subtitle", srtMaxDur: "Max duration (s)", srtMinDur: "Min duration (s)", srtPause: "Split on pause (s)",
   srtGenerate: "Generate subtitles", srtWorking: "Working…", srtDone: "{n} subtitles ready.", srtStageDecode: "Reading the audio…", srtStageChunk: "Transcribing part {i} of {n}…",
   srtStageCues: "Building subtitles…", srtStageDone: "Done.", srtCues: "subtitles", srtWordLevel: "Word-level timing", srtSegLevel: "Segment-level timing (less precise)",
@@ -125,7 +125,7 @@ export const km = {
   keyBadFormat: "នេះមិនមែនជា API key ទេ (យ៉ាងតិច ៨ តួអក្សរ គ្មានដកឃ្លា)។", keyChecking: "កំពុងត្រួតពិនិត្យ…", keySave: "ត្រួតពិនិត្យ និងរក្សាទុក",
   keySaved: "បានផ្ទៀងផ្ទាត់ API key។", keyRemember: "រក្សាទុកសម្រាប់ផ្ទាំង browser នេះប៉ុណ្ណោះ", keyGet: "ទទួលបាន key ឥតគិតថ្លៃក្នុង Google AI Studio",
 
-  qrSub: "បង្កើត QR code សម្រាប់តំណ Wi-Fi ទំនាក់ទំនង និងច្រើនទៀត។", qrType: "ប្រភេទ QR", qrUrl: "តំណ", qrText: "អត្ថបទ", qrWifi: "Wi-Fi", qrEmail: "អ៊ីមែល",
+  qrSub: "បង្កើត QR code សម្រាប់តំណ Wi-Fi ទំនាក់ទំនង និងច្រើនទៀត។", qrType: "ប្រភេទ QR", qrImage: "រូបភាព", qrImgPick: "ជ្រើសរើសរូបភាព", qrImgUploading: "កំពុងផ្ទុកឡើង…", qrImgOk: "បានរក្សាទុករូបភាព។ QR របស់អ្នករួចរាល់។", qrImgType: "សូមប្រើរូបភាព PNG, JPG, GIF ឬ WebP។", qrImgBig: "រូបភាពត្រូវតែមានទំហំ ៣ MB ឬតូចជាងនេះ។", qrImgLogin: "សូមចូលគណនីដើម្បីផ្ទុករូបភាពឡើងសម្រាប់ QR code។", qrImgOpen: "បើក", qrImgHint: "រូបភាពត្រូវបានរក្សាទុកក្នុង cloud របស់អ្នក ហើយស្កេន QR នឹងបើករូបភាពនោះ។", qrUrl: "តំណ", qrText: "អត្ថបទ", qrWifi: "Wi-Fi", qrEmail: "អ៊ីមែល",
   qrPhone: "លេខទូរស័ព្ទ", qrSms: "SMS", qrVcard: "ទំនាក់ទំនង", qrTextPh: "វាយអត្ថបទណាមួយ…", qrSsid: "ឈ្មោះបណ្តាញ (SSID)", qrSecurity: "សុវត្ថិភាព",
   qrNoPass: "គ្មានពាក្យសម្ងាត់", qrHidden: "បណ្តាញលាក់", qrSubject: "ប្រធានបទ", qrBody: "សារ", qrMessage: "សារ", qrOrg: "ក្រុមហ៊ុន",
   qrJob: "មុខតំណែង", qrWebsite: "គេហទំព័រ", qrStyle: "ពណ៌ និងទំហំ", qrForeground: "ពណ៌ QR", qrBackground: "ផ្ទៃខាងក្រោយ", qrSize: "ទំហំ",
@@ -134,7 +134,7 @@ export const km = {
 
   ipSub: "ផ្ទុកឡើងរូបភាព ហើយទទួលបាន prompt សម្រាប់ AI បង្កើតរូបភាព។", ipDropHint: "PNG, JPG ឬ WebP — រូបថតធំៗនឹងត្រូវបង្រួមដោយស្វ័យប្រវត្តិ",
   ipBadType: "សូមជ្រើសរើសរូបភាព PNG, JPG ឬ WebP។", ipStyle: "ប្រភេទ prompt", ipDetailed: "លម្អិត", ipMidjourney: "Midjourney", ipSd: "Stable Diffusion", ipShort: "ខ្លី",
-  ipGenerate: "បង្កើត prompt", ipWorking: "កំពុងវិភាគរូបភាព…", ipDone: "Prompt រួចរាល់។", ipPrompt: "Prompt", ipNegative: "Negative prompt", ipModel: "ម៉ូដែល",
+  ipGenerate: "បង្កើត prompt", ipWorking: "កំពុងវិភាគរូបភាព…", ipDone: "Prompt រួចរាល់។", ipFree: "ឧបករណ៍ឥតគិតថ្លៃ — មិនប្រើ token ទេ។", ipPrompt: "Prompt", ipNegative: "Negative prompt", ipModel: "ម៉ូដែល",
   ipEmpty: "Prompt របស់អ្នកនឹងបង្ហាញនៅទីនេះ។", ipPreviewAlt: "រូបភាពដែលបានជ្រើស",
 
   vdLink: "តំណវីដេអូ ឬរូបភាព", vdFetch: "យកតំណទាញយក", vdFetching: "កំពុងស្វែងរក…", vdDirect: "ឯកសារផ្ទាល់",
@@ -146,7 +146,7 @@ export const km = {
   eaServerNote: "បម្លែងនៅលើម៉ាស៊ីនបម្រើ (ឯកសារដល់ 4 MB)។", eaBrowserNote: "បម្លែងក្នុង browser របស់អ្នក — ឯកសារមិនត្រូវបានផ្ទុកឡើងទេ។",
   eaBigFile: "ឯកសារនេះធំជាង {mb} MB ដូច្នេះនឹងបម្លែងក្នុង browser ជា WAV។", eaWavOnly: "ឯកសារធំជាង {mb} MB បម្លែងក្នុង browser ហើយរក្សាទុកបានតែជា WAV ប៉ុណ្ណោះ។",
 
-  srtSub: "សម្លេង ឬវីដេអូខ្មែរ → ចំណងជើងរងដែលកែបាន ជាមួយពេលវេលាពិតប្រាកដរៀងរាល់ពាក្យ។", srtDropHint: "MP3, WAV, M4A, MP4, WebM… (រហូតដល់ ៦០ នាទី)",
+  srtSub: "សម្លេង ឬវីដេអូខ្មែរ → ចំណងជើងរងដែលកែបាន ជាមួយពេលវេលាពិតប្រាកដរៀងរាល់ពាក្យ។", srtDropHint: "MP3, WAV, M4A, MP4, WebM… (រហូតដល់ ៦០ នាទី)", srtLinkLabel: "…ឬបិទភ្ជាប់តំណ TikTok / Pinterest", srtLinkBtn: "ទាញយកពីតំណ", srtLinkFetching: "កំពុងទាញយក…", srtLinkBad: "សូមបញ្ចូលតំណពេញ ចាប់ផ្ដើមដោយ https://", srtLinkNoMedia: "រកមិនឃើញសម្លេង ឬវីដេអូនៅតំណនោះទេ។", srtLinkFail: "មិនអាចទាញយកតំណនោះបានទេ។ សូមព្យាយាមម្ដងទៀត។", srtLinkOk: "បានផ្ទុកតំណ។ ចុច Generate។",
   srtSettings: "ការកំណត់ចំណងជើងរង", srtMaxChars: "តួអក្សរក្នុងមួយបន្ទាត់", srtMaxLines: "បន្ទាត់ក្នុងមួយចំណងជើងរង", srtMaxDur: "រយៈពេលអតិបរមា (វិ)", srtMinDur: "រយៈពេលអប្បបរមា (វិ)", srtPause: "ញែកពេលផ្អាក (វិ)",
   srtGenerate: "បង្កើតចំណងជើងរង", srtWorking: "កំពុងដំណើរការ…", srtDone: "ចំណងជើងរង {n} រួចរាល់។", srtStageDecode: "កំពុងអានសម្លេង…", srtStageChunk: "កំពុងបម្លែងផ្នែកទី {i} ក្នុងចំណោម {n}…",
   srtStageCues: "កំពុងបង្កើតចំណងជើងរង…", srtStageDone: "រួចរាល់។", srtCues: "ចំណងជើងរង", srtWordLevel: "ពេលវេលារៀងរាល់ពាក្យ", srtSegLevel: "ពេលវេលាតាមឃ្លា (ភាពជាក់លាក់តិចជាង)",

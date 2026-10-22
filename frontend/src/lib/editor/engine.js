@@ -1,9 +1,16 @@
-import { clipEnd, clipsAt, drawOrder, projectDuration } from "./model.js";
+import { clipEnd, clipsAt, drawOrder, fadeAlpha, projectDuration } from "./model.js";
 
 // Realtime preview + export engine.
 // One <video>/<audio>/<img> element per clip, drawn onto a canvas; audio goes through WebAudio so
 // the very same graph can be recorded for export (canvas.captureStream + MediaRecorder).
-const FONT = '"Kantumruy Pro","Kantumruy","Noto Sans Khmer","Noto Sans SC",system-ui,sans-serif';
+const KH = '"Kantumruy Pro","Kantumruy","Noto Sans Khmer","Noto Sans SC"';
+export const FONTS = {
+  sans: `${KH},system-ui,sans-serif`,
+  serif: `"Noto Serif Khmer","Noto Serif SC",Georgia,"Times New Roman",serif`,
+  mono: `ui-monospace,Menlo,Consolas,${KH},monospace`,
+  round: `"Nunito","Quicksand",${KH},system-ui,sans-serif`,
+  display: `Impact,"Arial Black",${KH},sans-serif`,
+};
 
 export class Engine {
   constructor({ canvas, getProject, onTime, onState }) {
@@ -150,7 +157,7 @@ export class Engine {
       if (!e) continue;
       if (!on) { if (!e.el.paused) e.el.pause(); continue; }
       const want = (c.offset || 0) + (this.t - c.start);
-      if (e.gain) e.gain.gain.value = Math.max(0, Math.min(2, c.volume ?? 1));
+      if (e.gain) e.gain.gain.value = Math.max(0, Math.min(2, (c.volume ?? 1) * fadeAlpha(c, this.t)));
       if (Math.abs(e.el.currentTime - want) > (playing ? 0.3 : 0.02)) {
         try { e.el.currentTime = want; } catch { /* not seekable yet */ }
       }
@@ -174,7 +181,7 @@ export class Engine {
     g.fillRect(0, 0, canvas.width, canvas.height);
     for (const c of drawOrder(clipsAt(p, this.t))) {
       g.save();
-      g.globalAlpha = c.opacity ?? 1;
+      g.globalAlpha = (c.opacity ?? 1) * fadeAlpha(c, this.t);
       if (c.type === "text" || c.type === "caption") this.drawText(g, c, p);
       else this.drawVisual(g, c, p);
       g.restore();
@@ -182,41 +189,84 @@ export class Engine {
     this.dirty = false;
   }
 
-  drawVisual(g, c, p) {
+  // Natural (unrotated) size of a visual clip in project pixels, or null while the media is still loading.
+  visualSize(c, p) {
     const e = this.elFor(c);
-    if (!e) return;
+    if (!e) return null;
     const el = e.el;
     const sw = el.videoWidth || el.naturalWidth || 0, sh = el.videoHeight || el.naturalHeight || 0;
-    if (!sw || !sh || (c.type === "video" && el.readyState < 2)) return;
+    if (!sw || !sh) return null;
     const fit = Math.min(p.width / sw, p.height / sh) * (c.scale ?? 1);
-    const w = sw * fit, h = sh * fit;
-    g.drawImage(el, (c.x ?? 0.5) * p.width - w / 2, (c.y ?? 0.5) * p.height - h / 2, w, h);
+    return { el, w: sw * fit, h: sh * fit };
   }
 
-  drawText(g, c, p) {
+  drawVisual(g, c, p) {
+    const v = this.visualSize(c, p);
+    if (!v || (c.type === "video" && v.el.readyState < 2)) return;
+    g.translate((c.x ?? 0.5) * p.width, (c.y ?? 0.5) * p.height);
+    if (c.rotation) g.rotate((c.rotation * Math.PI) / 180);
+    if (c.flipX) g.scale(-1, 1);
+    const f = [];
+    if (c.brightness != null && c.brightness !== 1) f.push(`brightness(${c.brightness})`);
+    if (c.contrast != null && c.contrast !== 1) f.push(`contrast(${c.contrast})`);
+    if (c.saturate != null && c.saturate !== 1) f.push(`saturate(${c.saturate})`);
+    if (f.length && "filter" in g) g.filter = f.join(" ");
+    g.drawImage(v.el, -v.w / 2, -v.h / 2, v.w, v.h);
+  }
+
+  textLayout(g, c, p) {
     const st = c.style || {};
     const px = Math.max(8, Math.round((st.size || 6) / 100 * p.height));
-    g.font = `${st.bold ? "700" : "400"} ${px}px ${FONT}`;
-    g.textBaseline = "middle";
-    g.textAlign = st.align === "left" ? "left" : st.align === "right" ? "right" : "center";
+    g.font = `${st.italic ? "italic " : ""}${st.bold ? "700" : "400"} ${px}px ${FONTS[st.font] || FONTS.sans}`;
     const maxW = p.width * 0.9;
     const lines = wrap(g, String(c.text || ""), maxW);
     const lh = px * 1.3;
-    const cx = (c.x ?? 0.5) * p.width;
-    const top = (c.y ?? 0.5) * p.height - (lines.length * lh) / 2;
+    const tw = Math.min(maxW, Math.max(...lines.map((l) => g.measureText(l).width), px));
+    return { st, px, lines, lh, maxW, w: tw + px * 0.8, h: lines.length * lh + px * 0.3 };
+  }
+
+  drawText(g, c, p) {
+    const L = this.textLayout(g, c, p);
+    const { st, px, lines, lh, maxW } = L;
+    g.translate((c.x ?? 0.5) * p.width, (c.y ?? 0.5) * p.height);
+    if (c.rotation) g.rotate((c.rotation * Math.PI) / 180);
+    g.textBaseline = "middle";
+    const ax = st.align === "left" ? -L.w / 2 + px * 0.4 : st.align === "right" ? L.w / 2 - px * 0.4 : 0;
+    g.textAlign = st.align === "left" ? "left" : st.align === "right" ? "right" : "center";
     if (st.bg && st.bg !== "rgba(0,0,0,0)" && st.bg !== "transparent") {
-      const w = Math.min(maxW, Math.max(...lines.map((l) => g.measureText(l).width))) + px * 0.8;
-      const bx = st.align === "left" ? cx - px * 0.4 : st.align === "right" ? cx - w + px * 0.4 : cx - w / 2;
       g.fillStyle = st.bg;
-      roundRect(g, bx, top - px * 0.15, w, lines.length * lh + px * 0.3, px * 0.25);
+      roundRect(g, -L.w / 2, -L.h / 2, L.w, L.h, px * 0.25);
       g.fill();
     }
+    const top = -(lines.length * lh) / 2;
     lines.forEach((l, i) => {
       const y = top + lh * i + lh / 2;
-      if (st.outline) { g.lineWidth = Math.max(2, px / 7); g.strokeStyle = "rgba(0,0,0,.85)"; g.lineJoin = "round"; g.strokeText(l, cx, y, maxW); }
+      if (st.shadow) { g.shadowColor = "rgba(0,0,0,.7)"; g.shadowBlur = px / 4; g.shadowOffsetY = px / 14; }
+      if (st.outline) { g.lineWidth = Math.max(2, px / 7); g.strokeStyle = st.outlineColor || "rgba(0,0,0,.85)"; g.lineJoin = "round"; g.strokeText(l, ax, y, maxW); }
       g.fillStyle = st.color || "#fff";
-      g.fillText(l, cx, y, maxW);
+      g.fillText(l, ax, y, maxW);
+      g.shadowColor = "transparent";
     });
+  }
+
+  // Bounding box of a clip in project pixels (for click-selection and the on-canvas handles).
+  boxOf(c) {
+    const p = this.getProject();
+    const cx = (c.x ?? 0.5) * p.width, cy = (c.y ?? 0.5) * p.height, rot = c.rotation || 0;
+    if (c.type === "text" || c.type === "caption") {
+      this.ctx2d.save();
+      const L = this.textLayout(this.ctx2d, c, p);
+      this.ctx2d.restore();
+      return { cx, cy, w: L.w, h: L.h, rot };
+    }
+    const v = this.visualSize(c, p);
+    return v ? { cx, cy, w: v.w, h: v.h, rot } : null;
+  }
+
+  // Visible, selectable clips at the playhead, bottom → top.
+  boxesAt() {
+    const p = this.getProject();
+    return drawOrder(clipsAt(p, this.t)).map((clip) => ({ clip, box: this.boxOf(clip) })).filter((x) => x.box);
   }
 
   // ── export ──

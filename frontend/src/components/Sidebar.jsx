@@ -15,7 +15,8 @@ import favIcon from "../assets/favicon/favicon.svg";
 function Sidebar({ isOpen, onClose, isCollapsed }) {
   const { user } = useAuth();
 
-  const items = sidebarItems.map((item) => {
+  // Guests do not see the Dashboard link (it needs an account).
+  const items = sidebarItems.filter((item) => user || item.labelKey !== "dashboard").map((item) => {
     if (item.labelKey === "account") {
       return {
         ...item,

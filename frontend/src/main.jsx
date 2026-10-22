@@ -16,6 +16,7 @@ import "remixicon/fonts/remixicon.css";
 //import "aos/dist/aos.css";
 import "aos/dist/aos.css";
 import "./styles/footer.css";
+import "./styles/ui-select.css";
 import "./styles/tools.css";
 import "./styles/variables.css";
 import "./styles/global.css";
@@ -29,6 +30,7 @@ import "./styles/home.css";
 import "./styles/pages.css";
 import "./styles/auth.css";
 import "./styles/admin-dashboard.css";
+import "./styles/admin-clean.css";
 
 // TOOLS
 import './styles/tools/cloudShare.css'

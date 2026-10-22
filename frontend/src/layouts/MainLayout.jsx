@@ -92,10 +92,12 @@ function MainLayout() {
   const path = location.pathname.replace(/\/+$/, "") || "/";
   const titleKey = pageTitleKeys[path] || (path.startsWith("/admin") ? "adminDashboard" : "notFound");
   const pageTitle = t(titleKey);
+  // The video editor is a full-screen workspace: no footer, no sidebar, no page padding.
+  const isEditor = /^\/tools\/video-editor\/[^/]+/.test(path);
   useDocumentTitle(path === "/" ? "" : pageTitle);
 
   return (
-    <div className={"app-shell" + (isSidebarCollapsed ? " sidebar-collapsed" : "")}>
+    <div className={"app-shell" + (isSidebarCollapsed ? " sidebar-collapsed" : "") + (isEditor ? " is-editor" : "")}>
       <Sidebar
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
@@ -103,14 +105,16 @@ function MainLayout() {
       />
 
       <div className="app-main">
-        <Header
-          title={pageTitle}
-          onMenuClick={() => setIsSidebarOpen(true)}
-          onToggleSidebar={toggleSidebarCollapsed}
-          isSidebarCollapsed={isSidebarCollapsed}
-          theme={theme}
-          onThemeToggle={toggleTheme}
-        />
+        {!isEditor && (
+          <Header
+            title={pageTitle}
+            onMenuClick={() => setIsSidebarOpen(true)}
+            onToggleSidebar={toggleSidebarCollapsed}
+            isSidebarCollapsed={isSidebarCollapsed}
+            theme={theme}
+            onThemeToggle={toggleTheme}
+          />
+        )}
 
         <main className="page-content">
           <AnimatePresence mode="wait">
@@ -129,7 +133,7 @@ function MainLayout() {
           </AnimatePresence>
         </main>
 
-        <Footer />
+        {!isEditor && <Footer />}
       </div>
     </div>
   );

@@ -172,3 +172,28 @@ test("tools status + error handler shape", async () => {
   assert.equal(r2.statusCode, 500);
   assert.ok(!JSON.stringify(r2.body).includes("AIzaSy"));
 });
+
+// ── QR image storage ──
+import { sniffImage, saveQrImage, readQrImage, listQrImages, deleteQrImage, __setQrImageModel } from "../services/qrImageService.js";
+test("qr image: sniff, save, read, list, delete (fake model)", async () => {
+  const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(32)]);
+  assert.equal(sniffImage(png), "image/png");
+  assert.equal(sniffImage(Buffer.from("<svg xmlns='x'><script>1</script></svg>")), null);
+  const rows = [];
+  __setQrImageModel({
+    countDocuments: async (q) => rows.filter((r) => r.owner === q.owner).length,
+    create: async (d) => rows.push({ ...d }),
+    findOneAndUpdate: () => ({ select: async () => rows[0] ? { mimeType: rows[0].mimeType, data: rows[0].data } : null }),
+    find: (q) => ({ sort: () => ({ limit: () => ({ select: () => ({ lean: async () => rows.filter((r) => r.owner === q.owner) }) }) }) }),
+    deleteOne: async (q) => { const i = rows.findIndex((r) => r.imageId === q.imageId && r.owner === q.owner); if (i >= 0) rows.splice(i, 1); return { deletedCount: i >= 0 ? 1 : 0 }; },
+  });
+  await assert.rejects(saveQrImage({ owner: "u1", name: "x.svg", buffer: Buffer.from("<svg xmlns='http://www.w3.org/2000/svg'></svg>") }), { code: "BAD_IMAGE" });
+  const s = await saveQrImage({ owner: "u1", name: "a/b.png", buffer: png });
+  assert.match(s.imageId, /^[A-Za-z0-9_-]{6,}$/);
+  assert.equal((await readQrImage(s.imageId)).mimeType, "image/png");
+  assert.equal(await readQrImage("../etc"), null);
+  assert.equal((await listQrImages("u1")).length, 1);
+  assert.equal(await deleteQrImage("u2", s.imageId), false); // not the owner
+  assert.equal(await deleteQrImage("u1", s.imageId), true);
+  __setQrImageModel(null);
+});

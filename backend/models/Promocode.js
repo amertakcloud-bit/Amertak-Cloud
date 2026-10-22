@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose from "../lib/odm/index.js";
 
 // PromoCode
 // Server-side source of truth for promo codes.

@@ -92,3 +92,9 @@
     margin-left: 0;
   }
 }
+
+/* Full-screen editor workspace */
+.app-shell.is-editor .app-main { margin-left: 0; height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
+.app-shell.is-editor > .sidebar, .app-shell.is-editor > aside { display: none; }
+.app-shell.is-editor .page-content { padding: 0; min-height: 0; overflow: hidden; flex: 1 1 auto; }
+.app-shell.is-editor .page-content-inner { height: 100%; }

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import Select from "../../components/ui/Select";
 import ToolShell from "../../components/tools/ToolShell";
 import Dropzone from "../../components/tools/Dropzone";
 import Waveform from "../../components/tools/Waveform";
@@ -99,9 +100,9 @@ export default function ExportAudio() {
           {route === "server" && (
             <div>
               <div className="tk-label"><i className="ri-equalizer-line" />{t("eaBitrate")}</div>
-              <select className="tk-select" value={bitrate} onChange={(e) => setBitrate(+e.target.value)}>
+              <Select value={bitrate} onChange={(e) => setBitrate(+e.target.value)}>
                 {BITRATES.map((b) => <option key={b} value={b}>{b} kbps</option>)}
-              </select>
+              </Select>
             </div>
           )}
 

@@ -163,3 +163,4 @@ input[type="range"].tk-range { width: 100%; accent-color: var(--primary); }
   .tk-progress.indeterminate > span, .tk-btn .spin { animation: none; }
 }
 .spin { animation: tk-spin 0.9s linear infinite; }
+.srt-link { margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border); display: grid; gap: 8px; }
