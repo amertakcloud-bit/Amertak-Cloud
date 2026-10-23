@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import Select from "../ui/Select";
 import GeminiKeyPanel from "../tools/GeminiKey";
 import { CAPTION_PRESETS } from "../../lib/editor/model";
+import { SWATCHES } from "./Inspector";
 
 const SUGGESTIONS = ["veAiEx1", "veAiEx2", "veAiEx3", "veAiEx4"];
 
@@ -9,7 +10,7 @@ const SUGGESTIONS = ["veAiEx1", "veAiEx2", "veAiEx3", "veAiEx4"];
 // Also holds the one-click AI tools (captions, translate-to-Khmer voice, remove silence, caption looks).
 export default function AiPanel({
   t, user, status, access, busy, aiBusy, history, onPrompt, cost, source, sourceClips, setAiSource, aiCost,
-  onGenerateCaptions, onTranslate, onRemoveSilence, onCaptionPreset, lang, setLang, voice, setVoice, orig, setOrig, project, balance,
+  onGenerateCaptions, onGenerateKhmerCaptions, onExtractAudio, highlight, onHighlight, onTranslate, onRemoveSilence, onCaptionPreset, lang, setLang, voice, setVoice, orig, setOrig, project, balance,
 }) {
   const [text, setText] = useState("");
   const box = useRef(null);
@@ -56,7 +57,22 @@ export default function AiPanel({
         </label>
         <div className="tk-hint"><i className="ri-coin-line" /> {t("veCaptionCost")}: <b>{source ? cost : "—"}</b> {t("tokUnit")}</div>
         <button type="button" className="tk-btn full" disabled={busy || !source} onClick={onGenerateCaptions}><i className="ri-closed-captioning-line" />{t("veGenCaptions")}</button>
+        <button type="button" className="tk-btn full" disabled={busy || !source} onClick={onGenerateKhmerCaptions}><i className="ri-translate-2" />{t("veGenCaptionsKm")}</button>
+        <p className="tk-hint">{t("veGenCaptionsKmHint")}</p>
+        <button type="button" className="tk-btn ghost full" disabled={busy || !source} onClick={onExtractAudio}><i className="ri-voiceprint-line" />{t("veExtractAudio")} <small>({t("free")})</small></button>
+        <p className="tk-hint">{t("veExtractHint")}</p>
         <button type="button" className="tk-btn ghost full" disabled={busy || !source} onClick={onRemoveSilence}><i className="ri-scissors-cut-line" />{t("veRemoveSilence")} <small>({t("free")})</small></button>
+      </section>
+
+      <section className="ve-sec">
+        <h4>{t("veHighlightTitle")}</h4>
+        <label className="ve-checks"><input type="checkbox" checked={highlight.on} onChange={(e) => onHighlight(e.target.checked, highlight.color)} /> {t("veHighlight")}</label>
+        <div className="ve-colors" role="group" aria-label={t("veHighlightColor")}>
+          {SWATCHES.map((c) => (
+            <button key={c} type="button" className={"ve-sw" + (highlight.color.toLowerCase() === c ? " on" : "")} style={{ background: c }} aria-label={c} onClick={() => onHighlight(true, c)} />
+          ))}
+          <input type="color" className="ve-color" value={/^#[0-9a-f]{6}$/i.test(highlight.color) ? highlight.color : "#facc15"} onChange={(e) => onHighlight(true, e.target.value)} aria-label={t("veHighlightColor")} />
+        </div>
       </section>
 
       <section className="ve-sec">
@@ -80,7 +96,9 @@ export default function AiPanel({
           </Select>
         </label>
         <div className="ve-field"><span>{t("veVoice")}</span>
+          {voice === "auto" && <small className="tk-hint">{t("veVoiceAutoHint")}</small>}
           <div className="tk-seg">
+            <button type="button" className={voice === "auto" ? "active" : ""} onClick={() => setVoice("auto")}>{t("veVoiceAuto")}</button>
             <button type="button" className={voice === "km-KH-PisethNeural" ? "active" : ""} onClick={() => setVoice("km-KH-PisethNeural")}>Piseth</button>
             <button type="button" className={voice === "km-KH-SreymomNeural" ? "active" : ""} onClick={() => setVoice("km-KH-SreymomNeural")}>Sreymom</button>
           </div>

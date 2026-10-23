@@ -24,6 +24,8 @@ export function cleanStyle(s) {
   if (typeof s.bold === "boolean") o.bold = s.bold;
   if (typeof s.italic === "boolean") o.italic = s.italic;
   if (typeof s.outline === "boolean") o.outline = s.outline;
+  if (typeof s.karaoke === "boolean") o.karaoke = s.karaoke;
+  if (typeof s.hl === "string" && COLOR.test(s.hl)) o.hl = s.hl;
   if (typeof s.shadow === "boolean") o.shadow = s.shadow;
   if (ALIGN.has(s.align)) o.align = s.align;
   if (FONTS.has(s.font)) o.font = s.font;
@@ -103,7 +105,7 @@ export function summarizeProject(p = {}) {
 const SYSTEM = `You are the AI assistant of a timeline video editor. Convert the user's request into edit operations.
 Reply with ONLY JSON: {"message": "<one short sentence in the user's language describing what you did>", "ops": [ ... ]}
 Allowed ops (times are seconds on the timeline; x,y are 0..1 of the frame; style.size is % of frame height, 2-12 typical):
- {"op":"add_text","text":"…","start":0,"dur":3,"x":0.5,"y":0.5,"style":{"size":7,"color":"#ffffff","bg":"rgba(0,0,0,0.55)","bold":true,"italic":false,"outline":true,"shadow":false,"align":"center","font":"sans|serif|mono|round|display"}}
+ {"op":"add_text","text":"…","start":0,"dur":3,"x":0.5,"y":0.5,"style":{"size":7,"color":"#ffffff","bg":"rgba(0,0,0,0.55)","bold":true,"italic":false,"outline":true,"shadow":false,"karaoke":true,"hl":"#facc15","align":"center","font":"sans|serif|mono|round|display"}}
  {"op":"update","target":"<clipId>|selected|captions|texts|all_video|all_audio","patch":{"x":0.5,"y":0.8,"scale":1,"rotation":0,"opacity":1,"volume":1,"fadeIn":0.5,"fadeOut":0.5,"brightness":1,"contrast":1,"saturate":1,"flipX":false,"start":0,"dur":2,"text":"…","style":{…same keys as above…}}}
  {"op":"delete","target":"<clipId>|selected"}   {"op":"ripple_delete","target":"<clipId>|selected"}
  {"op":"split","target":"<clipId>|selected","at":4.2}

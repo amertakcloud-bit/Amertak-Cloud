@@ -100,7 +100,7 @@ input[type="range"].tk-range { width: 100%; accent-color: var(--primary); }
 
 /* Progress */
 .tk-progress { height: 8px; border-radius: 99px; background: var(--primary-soft); overflow: hidden; }
-.tk-progress > span { display: block; height: 100%; border-radius: inherit; background: var(--grad); transition: width 0.4s ease; }
+.tk-progress > span { display: block; height: 100%; border-radius: inherit; background: var(--grad); transition: width 0.12s linear; }
 .tk-progress.indeterminate > span { width: 40% !important; animation: tk-ind 1.2s ease-in-out infinite; }
 @keyframes tk-ind { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
 

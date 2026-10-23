@@ -110,7 +110,7 @@ export const toolsApi = {
 
   // ── Video editor
   editorAi: (instruction, project, signal) => request("/editor/ai", { method: "POST", json: { instruction, project }, withKey: true, signal }),
-  editorTranslate: (lines, from, signal) => request("/editor/translate", { method: "POST", json: { lines, from }, withKey: true, signal }),
+  editorTranslate: (lines, from, signal, speakers = false) => request("/editor/translate", { method: "POST", json: { lines, from, ...(speakers ? { speakers: true } : {}) }, withKey: true, signal }),
 
   // ── Video downloader
   videoResolve: (url, signal) => request("/video/resolve", { method: "POST", json: { url }, signal }),

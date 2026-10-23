@@ -14,17 +14,19 @@ import Inspector from "../../components/editor/Inspector";
 import StageOverlay from "../../components/editor/StageOverlay";
 import AiPanel from "../../components/editor/AiPanel";
 import { friendlyError } from "../../lib/errors";
-import { saveBlob as download } from "../../lib/download";
+import { formatBytes, saveBlob as download } from "../../lib/download";
 import { RATES, tokensForBytes } from "../../lib/tokens";
 import { Engine } from "../../lib/editor/engine";
-import { deleteProjectMedia, getMedia, probeMedia, putMedia } from "../../lib/editor/mediaStore";
-import { captionsFromFile, pool, translateLines, voiceClip, voiceForCue, voiceMedia } from "../../lib/editor/ai";
+import { deleteMedia, deleteProjectMedia, getMedia, probeMedia, putMedia } from "../../lib/editor/mediaStore";
+import { estimateWavBytes, extractAudio } from "../../lib/editor/extract";
+import { captionsFromFile, pool, translateLines, voiceClip, voiceForCue, voiceForGender, voiceMedia } from "../../lib/editor/ai";
 import {
   addClip, addMedia, applyCaptionPreset, buildSrt, cuesToCaptionClips, cuesToTimelineCaptions, duplicateClip, makeMediaClip, makeTextClip,
-  newProject, parseSrt, projectDuration, removeClip, removeSilentRanges, rippleDelete, splitClip, TEXT_PRESETS, trimEnd, trimStart, uid, updateClip,
+  DEFAULT_HIGHLIGHT, newProject, parseSrt, projectDuration, removeClip, removeSilentRanges, rippleDelete, round3, setCaptionHighlight, splitClip, TEXT_PRESETS, trimEnd, trimStart, uid, updateClip,
 } from "../../lib/editor/model";
 import { applyOps } from "../../lib/editor/aiOps";
 import { decodeMono, findSilences } from "../../lib/editor/silence";
+import useSmoothProgress from "../../hooks/useSmoothProgress";
 import "../../styles/tools/editor.css";
 
 const PRESETS = [
@@ -188,10 +190,13 @@ function Workspace({ id }) {
   const [missing, setMissing] = useState([]);
   const [save, setSave] = useState("saved"); // saved | dirty | saving | error
   const [task, setTask] = useState(null); // { label, percent }
+  const taskPct = useSmoothProgress(task?.percent ?? 0, Boolean(task));
+  const taskPctRef = useRef(0);
+  taskPctRef.current = taskPct;
   const [loadError, setLoadError] = useState("");
   const [aiSource, setAiSource] = useState("");
   const [lang, setLang] = useState("auto");
-  const [voice, setVoice] = useState("km-KH-PisethNeural");
+  const [voice, setVoice] = useState("auto"); // auto = male/female chosen per speaker
   const [orig, setOrig] = useState("duck");
   const [defaults, setDefaults] = useState(null);
 
@@ -405,14 +410,55 @@ function Workspace({ id }) {
   /* ───────── AI: captions ───────── */
   const sourceClips = project.clips.filter((c) => (c.type === "video" || c.type === "audio") && c.lane !== "voice");
   const source = sourceClips.find((c) => c.id === aiSource) || (sel && sourceClips.find((c) => c.id === sel.id)) || sourceClips[0] || null;
-  const sourceBlobSize = source ? project.media[source.mediaId]?.size || 0 : 0;
+  const srcMedia = source ? project.media[source.mediaId] : null;
+  const extractedOf = (mediaId) => Object.values(projRef.current.media).find((x) => x.audioOf === mediaId);
+  const extracted = srcMedia ? Object.values(project.media).find((x) => x.audioOf === srcMedia.id) : null;
+  // Videos are reduced to their sound first (16 kHz mono WAV), so the upload — and the token cost — is much smaller.
+  const sourceBlobSize = !srcMedia ? 0 : extracted ? extracted.size || 0 : srcMedia.kind === "video" ? estimateWavBytes(srcMedia.duration || 0) : srcMedia.size || 0;
   const cost = tokensForBytes(sourceBlobSize, RATES.captionPerMB);
 
-  async function sourceFile(clip) {
+  // Pulls the sound out of a video and keeps it in the media library (reused next time).
+  async function extractToLibrary(mediaId, blob) {
+    const m = projRef.current.media[mediaId];
+    const r = await extractAudio(blob, m.name);
+    const media = { id: uid("m"), name: r.file.name, kind: "audio", source: "extracted", audioOf: mediaId, duration: r.duration, width: 0, height: 0, size: r.size };
+    await putMedia(id, media.id, r.file);
+    engine.current?.setMedia(media.id, r.file);
+    edit((p) => addMedia(p, media));
+    return { media, file: r.file, from: m.size };
+  }
+
+  // The file that is sent for transcription: the extracted audio (made on the fly if needed) or the audio file itself.
+  async function sourceFile(clip, progress) {
     const m = projRef.current.media[clip.mediaId];
+    const ex = extractedOf(clip.mediaId);
+    if (ex) {
+      const b = await getMedia(id, ex.id).catch(() => null);
+      if (b) return new File([b], ex.name, { type: "audio/wav" });
+    }
     const blob = await getMedia(id, clip.mediaId).catch(() => null);
     if (!blob) throw new Error(t("veMissingMedia"));
+    if (m.kind === "video") {
+      progress?.(3, t("veTaskExtract"));
+      return (await extractToLibrary(clip.mediaId, blob)).file;
+    }
     return new File([blob], m.name, { type: blob.type });
+  }
+
+  /* ───────── extract audio (video → small WAV) ───────── */
+  async function extractAudioTool() {
+    const src = source;
+    if (!src || project.media[src.mediaId]?.kind !== "video") { toast.info(t("veNeedVideo")); return; }
+    const have = extractedOf(src.mediaId);
+    if (have) { toast.info(t("veExtractedAlready").replace("{a}", formatBytes(have.size || 0))); return; }
+    await runTask(t("veTaskExtract"), async (_signal, progress) => {
+      progress(8);
+      const blob = await getMedia(id, src.mediaId).catch(() => null);
+      if (!blob) throw new Error(t("veMissingMedia"));
+      progress(20);
+      const r = await extractToLibrary(src.mediaId, blob);
+      toast.success(t("veExtracted").replace("{a}", formatBytes(r.media.size)).replace("{b}", formatBytes(r.from || 0)));
+    });
   }
 
   async function runTask(label, fn) {
@@ -420,6 +466,9 @@ function Workspace({ id }) {
     setTask({ label, percent: 1 });
     try {
       await fn(abort.current.signal, (percent, l) => setTask({ label: l || label, percent: Math.round(percent) }));
+      setTask((x) => x && { ...x, percent: 100 });
+      for (let i = 0; i < 50 && taskPctRef.current < 100; i++) await new Promise((r) => setTimeout(r, 50)); // let the counter reach 100%
+      await new Promise((r) => setTimeout(r, 250));
     } catch (e) {
       if (e.code === "ABORTED" || abort.current?.signal.aborted) toast.info(t("cancelled"));
       else toast.error(friendlyError(e, t));
@@ -437,48 +486,60 @@ function Workspace({ id }) {
     return confirm({ title: t("veUseTokensTitle"), message: t("veUseTokensMsg").replace("{n}", String(cost)).replace("{name}", c), confirmText: t("veContinue") });
   }
 
-  async function generateCaptions() {
+  // translate = false → captions in the spoken language; true → translated to Khmer (from Chinese / English).
+  async function generateCaptions({ translate = false } = {}) {
     if (!(await checkReady(project.media[source?.mediaId]?.name || ""))) return;
     const src = source;
-    await runTask(t("veTaskCaptions"), async (signal, progress) => {
-      const file = await sourceFile(src);
+    await runTask(translate ? t("veTaskCaptionsKm") : t("veTaskCaptions"), async (signal, progress) => {
+      const file = await sourceFile(src, (p, l) => progress(p, l));
+      const top = translate ? 70 : 99;
       const { cues, cost: spent } = await captionsFromFile(file, {
         settings: defaults || undefined, signal, onCharged: () => refreshUser(),
-        onProgress: (p) => progress(p.percent || 1),
+        onProgress: (p) => progress(5 + (p.percent || 1) * ((top - 5) / 100)),
       });
+      let texts = cues.map((c) => c.text);
+      if (translate && texts.length) {
+        progress(72, t("veTaskTranslate"));
+        texts = await translateLines(texts, lang, signal, { onProgress: (d, n) => progress(72 + (d / n) * 26) });
+      }
+      const translated = cues.map((c, i) => ({ ...c, text: texts[i] || c.text }));
       edit((p) => ({
         ...p,
-        clips: [...p.clips.filter((c) => !(c.type === "caption" && c.source === src.id)), ...cuesToCaptionClips(cues, src, p.captionStyle)],
+        clips: [...p.clips.filter((c) => !(c.type === "caption" && c.source === src.id)), ...cuesToCaptionClips(translated, src, p.captionStyle)],
       }));
       toast.success(`${t("srtDone").replace("{n}", String(cues.length))} ${t("tokCharged").replace("{n}", String(spent))}`);
     });
   }
 
   /* ───────── AI: translate to Khmer voice ───────── */
+  // voice === "auto": the AI decides male / female for every line from the dialogue (Piseth = male, Sreymom = female).
   async function translateToVoice() {
     if (!(await checkReady(project.media[source?.mediaId]?.name || ""))) return;
     const src = source;
     await runTask(t("veTaskTranscribe"), async (signal, progress) => {
-      const file = await sourceFile(src);
-      const { cues } = await captionsFromFile(file, { settings: defaults || undefined, signal, onCharged: () => refreshUser(), onProgress: (p) => progress((p.percent || 1) * 0.5) });
+      const file = await sourceFile(src, (p, l) => progress(p, l));
+      const { cues } = await captionsFromFile(file, { settings: defaults || undefined, signal, onCharged: () => refreshUser(), onProgress: (p) => progress(5 + (p.percent || 1) * 0.4) });
       const mapped = cuesToCaptionClips(cues, src);
       if (!mapped.length) throw new Error(t("veNoSpeech"));
 
-      progress(52, t("veTaskTranslate"));
-      const km = await translateLines(mapped.map((c) => c.text), lang, signal);
+      progress(46, t("veTaskTranslate"));
+      const auto = voice === "auto";
+      const tr = await translateLines(mapped.map((c) => c.text), lang, signal, { speakers: auto, onProgress: (d, n) => progress(46 + (d / n) * 8) });
+      const km = auto ? tr.lines : tr;
+      const names = mapped.map((_, i) => (auto ? voiceForGender(tr.genders[i]) : voice));
 
-      // Captions become the Khmer text (the voice reads exactly what is shown).
+      // Captions become the Khmer text (the voice reads exactly what is shown) and highlight the word being spoken.
+      const hlStyle = (p) => ({ ...p.captionStyle, karaoke: true, hl: p.captionStyle.hl || DEFAULT_HIGHLIGHT });
       const caps = mapped.map((c, i) => ({ ...c, text: km[i] || c.text, id: uid("c") }));
-      edit((p) => ({ ...p, clips: [...p.clips.filter((c) => !(c.type === "caption" && c.source === src.id)), ...caps.map((c) => ({ ...c, style: { ...p.captionStyle } }))] }));
+      edit((p) => ({ ...p, captionStyle: hlStyle(p), clips: [...p.clips.filter((c) => !(c.type === "caption" && c.source === src.id)), ...caps.map((c) => ({ ...c, style: hlStyle(p) }))] }));
 
-      progress(60, t("veTaskVoice"));
+      progress(56, t("veTaskVoice"));
       const results = new Array(caps.length);
       let done = 0;
       await pool(caps, 2, async (c, i) => {
-        const v = await voiceForCue({ text: c.text, voice, slot: c.dur, signal });
-        results[i] = v;
+        results[i] = await voiceForCue({ text: c.text, voice: names[i], slot: c.dur, signal });
         done += 1;
-        progress(60 + (done / caps.length) * 38);
+        progress(56 + (done / caps.length) * 42);
       }, signal);
 
       let next = projRef.current;
@@ -489,7 +550,8 @@ function Workspace({ id }) {
         const m = voiceMedia(`voice-${i + 1}.mp3`, v.duration, v.blob.size);
         await putMedia(id, m.id, v.blob);
         engine.current?.setMedia(m.id, v.blob);
-        next = addClip(addMedia(next, m), { ...voiceClip(m, caps[i].start), source: src.id });
+        next = addClip(addMedia(next, m), { ...voiceClip(m, caps[i].start), source: src.id, text: caps[i].text, voice: names[i], cap: caps[i].id });
+        next = updateClip(next, caps[i].id, { speechDur: round3(v.duration) });
       }
       if (orig !== "keep") next = updateClip(next, src.id, { volume: orig === "mute" ? 0 : 0.12 });
       commit(next, { baseline: projRef.current });
@@ -497,6 +559,32 @@ function Workspace({ id }) {
       toast.success(t("veVoiceDone").replace("{n}", String(caps.length)));
     });
   }
+
+  /* ───────── regenerate one generated voice with your own text ───────── */
+  async function regenerateVoice(vc, text, voiceName) {
+    const clean = String(text || "").replace(/\s+/g, " ").trim();
+    if (!clean) { toast.info(t("veVoiceEmpty")); return; }
+    const cap = projRef.current.clips.find((c) => c.id === vc.cap);
+    await runTask(t("veTaskVoice"), async (signal, progress) => {
+      progress(10);
+      const v = await voiceForCue({ text: clean, voice: voiceName, slot: Math.max(0.5, cap?.dur ?? vc.dur), signal });
+      progress(75);
+      const m = voiceMedia(`voice-${Date.now().toString(36)}.mp3`, v.duration, v.blob.size);
+      await putMedia(id, m.id, v.blob);
+      engine.current?.setMedia(m.id, v.blob);
+      let next = updateClip(addMedia(projRef.current, m), vc.id, { mediaId: m.id, dur: round3(v.duration), offset: 0, text: clean, voice: voiceName });
+      if (cap) next = updateClip(next, cap.id, { text: clean, speechDur: round3(v.duration) });
+      if (!next.clips.some((c) => c.mediaId === vc.mediaId)) { // old audio no longer used → free it
+        const { [vc.mediaId]: _gone, ...rest } = next.media;
+        next = { ...next, media: rest };
+        deleteMedia(id, vc.mediaId).catch(() => {});
+      }
+      commit(next, { baseline: projRef.current });
+      engine.current?.seek(vc.start);
+      toast.success(t("veVoiceRegenerated"));
+    });
+  }
+  const applyHighlight = (on, color) => edit((p) => setCaptionHighlight(p, on, color));
 
   /* ───────── AI: remove silence (free, runs in the browser) ───────── */
   async function removeSilence() {
@@ -579,7 +667,7 @@ function Workspace({ id }) {
 
   const busy = Boolean(task);
   const canTrim = Boolean(sel && time > sel.start && time < sel.start + sel.dur);
-  const inspector = <Inspector clip={sel} project={project} onChange={changeSel} onApplyCaptionStyle={applyCaptionStyle} t={t} />;
+  const inspector = <Inspector clip={sel} project={project} onChange={changeSel} onApplyCaptionStyle={applyCaptionStyle} onRegenerate={regenerateVoice} busy={Boolean(task)} t={t} />;
   const TABS = [
     ["media", "ri-folder-video-line", "veTab_media"],
     ["text", "ri-text", "veTab_text"],
@@ -620,7 +708,7 @@ function Workspace({ id }) {
                 {mediaList.length === 0 && <p className="tk-hint">{t("veNoMedia")}</p>}
                 {mediaList.map((m) => (
                   <div key={m.id} className="ve-mitem">
-                    <i className={m.kind === "video" ? "ri-film-line" : m.kind === "audio" ? "ri-music-2-line" : "ri-image-line"} />
+                    <i className={m.kind === "video" ? "ri-film-line" : m.source === "extracted" ? "ri-voiceprint-line" : m.kind === "audio" ? "ri-music-2-line" : "ri-image-line"} />
                     <span className="ve-mname" title={m.name}>{m.name}</span>
                     {missing.includes(m.id) ? (
                       fileInput({ accept: "video/*,audio/*,image/*", onChange: (e) => relink(m.id, e.target.files?.[0]) }, "tk-btn ghost small ve-file", t("veRelink"))
@@ -653,7 +741,7 @@ function Workspace({ id }) {
             {activeTab === "ai" && (
               <AiPanel t={t} user={user} status={status} access={access} busy={busy} aiBusy={aiBusy} history={aiHistory} onPrompt={runAi}
                 cost={cost} aiCost={AI_EDIT_COST} balance={Number(user?.tokens ?? 0)} source={source} sourceClips={sourceClips} setAiSource={setAiSource}
-                onGenerateCaptions={generateCaptions} onTranslate={translateToVoice} onRemoveSilence={removeSilence} onCaptionPreset={applyPreset}
+                onGenerateCaptions={() => generateCaptions()} onGenerateKhmerCaptions={() => generateCaptions({ translate: true })} onExtractAudio={extractAudioTool} highlight={{ on: Boolean(project.captionStyle?.karaoke), color: project.captionStyle?.hl || DEFAULT_HIGHLIGHT }} onHighlight={applyHighlight} onTranslate={translateToVoice} onRemoveSilence={removeSilence} onCaptionPreset={applyPreset}
                 lang={lang} setLang={setLang} voice={voice} setVoice={setVoice} orig={orig} setOrig={setOrig} project={project} />
             )}
 
@@ -706,8 +794,8 @@ function Workspace({ id }) {
         <div className="ve-task" role="status" aria-live="polite">
           <div className="ve-task-card">
             <b>{task.label}</b>
-            <div className="tk-progress"><span style={{ width: `${task.percent}%` }} /></div>
-            <span className="tk-hint">{task.percent}%{task.label === t("veExporting") ? ` · ${t("veKeepOpen")}` : ""}</span>
+            <div className="tk-progress" role="progressbar" aria-valuenow={taskPct} aria-valuemin="0" aria-valuemax="100"><span style={{ width: `${taskPct}%` }} /></div>
+            <span className="tk-hint">{taskPct}%{task.label === t("veExporting") ? ` · ${t("veKeepOpen")}` : ""}</span>
             <button type="button" className="tk-btn ghost small" onClick={cancelTask}><i className="ri-stop-circle-line" />{t("cancel")}</button>
           </div>
         </div>

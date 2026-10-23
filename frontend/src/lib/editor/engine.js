@@ -1,4 +1,4 @@
-import { clipEnd, clipsAt, drawOrder, fadeAlpha, projectDuration } from "./model.js";
+import { activeWordIndex, clipEnd, clipsAt, DEFAULT_HIGHLIGHT, drawOrder, fadeAlpha, projectDuration, splitWords } from "./model.js";
 
 // Realtime preview + export engine.
 // One <video>/<audio>/<img> element per clip, drawn onto a canvas; audio goes through WebAudio so
@@ -239,12 +239,37 @@ export class Engine {
       g.fill();
     }
     const top = -(lines.length * lh) / 2;
+    // word highlight: which word is being spoken right now?
+    let tokensPerLine = null, active = -1;
+    if (st.karaoke) {
+      tokensPerLine = lines.map(splitWords);
+      const weights = tokensPerLine.flat().filter((x) => x.word).map((x) => Array.from(x.s).length);
+      active = activeWordIndex(weights, this.t - c.start, c.speechDur || c.dur);
+    }
+    let wordNo = 0;
     lines.forEach((l, i) => {
       const y = top + lh * i + lh / 2;
       if (st.shadow) { g.shadowColor = "rgba(0,0,0,.7)"; g.shadowBlur = px / 4; g.shadowOffsetY = px / 14; }
-      if (st.outline) { g.lineWidth = Math.max(2, px / 7); g.strokeStyle = st.outlineColor || "rgba(0,0,0,.85)"; g.lineJoin = "round"; g.strokeText(l, ax, y, maxW); }
-      g.fillStyle = st.color || "#fff";
-      g.fillText(l, ax, y, maxW);
+      const paint = (txt, x, color) => {
+        if (st.outline) { g.lineWidth = Math.max(2, px / 7); g.strokeStyle = st.outlineColor || "rgba(0,0,0,.85)"; g.lineJoin = "round"; g.strokeText(txt, x, y, maxW); }
+        g.fillStyle = color;
+        g.fillText(txt, x, y, maxW);
+      };
+      if (tokensPerLine) {
+        const toks = tokensPerLine[i];
+        const total = toks.reduce((sum, k) => sum + g.measureText(k.s).width, 0);
+        let x = st.align === "left" ? ax : st.align === "right" ? ax - total : ax - total / 2;
+        const keep = g.textAlign;
+        g.textAlign = "left";
+        for (const k of toks) {
+          const on = k.word && wordNo++ === active;
+          paint(k.s, x, on ? (st.hl || DEFAULT_HIGHLIGHT) : (st.color || "#fff"));
+          x += g.measureText(k.s).width;
+        }
+        g.textAlign = keep;
+      } else {
+        paint(l, ax, st.color || "#fff");
+      }
       g.shadowColor = "transparent";
     });
   }

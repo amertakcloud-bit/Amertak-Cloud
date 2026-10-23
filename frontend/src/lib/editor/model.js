@@ -279,5 +279,34 @@ export const CAPTION_PRESETS = [
   { id: "center", key: "veCapCenter", style: { size: 7.5, color: "#ffffff", bg: "rgba(0,0,0,0)", bold: true, outline: true, shadow: true, font: "display" }, y: 0.5 },
 ];
 export function applyCaptionPreset(p, preset) {
-  return { ...p, captionStyle: { ...preset.style }, clips: p.clips.map((c) => (c.type === "caption" ? { ...c, style: { ...preset.style }, y: preset.y } : c)) };
+  const keep = { karaoke: p.captionStyle?.karaoke, hl: p.captionStyle?.hl }; // a look must not switch the word highlight off
+  const st = { ...preset.style, ...(keep.karaoke ? keep : {}) };
+  return { ...p, captionStyle: st, clips: p.clips.map((c) => (c.type === "caption" ? { ...c, style: { ...st }, y: preset.y } : c)) };
+}
+
+// ── word highlight ("karaoke") ──
+// Splits text into tokens; word tokens are the ones that can be highlighted (Khmer/Chinese too, via Intl.Segmenter).
+export function splitWords(text) {
+  const str = String(text ?? "");
+  if (typeof Intl !== "undefined" && Intl.Segmenter) {
+    return Array.from(new Intl.Segmenter(undefined, { granularity: "word" }).segment(str), (x) => ({ s: x.segment, word: Boolean(x.isWordLike) }));
+  }
+  return str.split(/(\s+)/).filter(Boolean).map((s) => ({ s, word: /\S/.test(s) }));
+}
+// Which word is being spoken at `tRel` seconds into a clip? Time is shared out by word length.
+// `total` = how long the speech lasts (voice length, or the whole clip). Returns -1 when none.
+export function activeWordIndex(weights, tRel, total) {
+  const sum = weights.reduce((a, b) => a + b, 0);
+  if (!sum || !(total > 0) || tRel < 0 || tRel >= total) return -1;
+  const x = (tRel / total) * sum;
+  let acc = 0;
+  for (let i = 0; i < weights.length; i++) { acc += weights[i]; if (x < acc) return i; }
+  return weights.length - 1;
+}
+export const DEFAULT_HIGHLIGHT = "#facc15";
+
+// Turn the spoken-word highlight on/off (and set its colour) for every caption + the default caption style.
+export function setCaptionHighlight(p, on, color = DEFAULT_HIGHLIGHT) {
+  const patch = { karaoke: Boolean(on), hl: color };
+  return { ...p, captionStyle: { ...p.captionStyle, ...patch }, clips: p.clips.map((c) => (c.type === "caption" ? { ...c, style: { ...c.style, ...patch } } : c)) };
 }

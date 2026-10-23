@@ -13,15 +13,21 @@ export async function captionsFromFile(file, { settings, onProgress, onCharged, 
 }
 
 // 2) Khmer translation, in batches of 120 lines
-export async function translateLines(lines, from, signal) {
-  const out = [];
+// With { speakers: true } it also returns the speaker's gender per line ("m" | "f") so the voice can be chosen automatically.
+export async function translateLines(lines, from, signal, { speakers = false, onProgress } = {}) {
+  const out = [], genders = [];
   for (let i = 0; i < lines.length; i += 120) {
     const batch = lines.slice(i, i + 120);
-    const res = await withRetry(() => toolsApi.editorTranslate(batch, from, signal), { signal });
+    const res = await withRetry(() => toolsApi.editorTranslate(batch, from, signal, speakers), { signal });
     out.push(...res.data.lines);
+    if (speakers) genders.push(...(res.data.genders || batch.map(() => "m")));
+    onProgress?.(Math.min(lines.length, i + batch.length), lines.length);
   }
-  return out;
+  return speakers ? { lines: out, genders } : out;
 }
+
+export const VOICES = { m: "km-KH-PisethNeural", f: "km-KH-SreymomNeural" };
+export const voiceForGender = (g) => (g === "f" ? VOICES.f : VOICES.m);
 
 let ac = null;
 export async function audioDuration(blob) {

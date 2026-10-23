@@ -1,4 +1,5 @@
-import { LANES } from "../../lib/editor/model";
+import { useState } from "react";
+import { DEFAULT_HIGHLIGHT, LANES } from "../../lib/editor/model";
 import Select from "../ui/Select";
 
 const BGS = [
@@ -45,8 +46,27 @@ function ColorPick({ value, onChange }) {
   );
 }
 
+// A generated Khmer voice: change the sentence / speaker and make it again.
+function VoiceSection({ clip, onRegenerate, busy, t }) {
+  const [text, setText] = useState(clip.text || "");
+  const [voice, setVoice] = useState(clip.voice || "km-KH-PisethNeural");
+  return (
+    <Section title={t("veVoiceTitle")}>
+      <textarea className="tk-input" rows={3} value={text} maxLength={500} onChange={(e) => setText(e.target.value)} placeholder={t("veVoiceText")} aria-label={t("veVoiceText")} />
+      <div className="tk-seg" role="group" aria-label={t("veVoice")}>
+        <button type="button" className={voice === "km-KH-PisethNeural" ? "active" : ""} onClick={() => setVoice("km-KH-PisethNeural")}>Piseth</button>
+        <button type="button" className={voice === "km-KH-SreymomNeural" ? "active" : ""} onClick={() => setVoice("km-KH-SreymomNeural")}>Sreymom</button>
+      </div>
+      <button type="button" className="tk-btn full" disabled={busy || !text.trim()} onClick={() => onRegenerate(clip, text, voice)}>
+        <i className="ri-mic-line" />{t("veRegenerate")}
+      </button>
+      <p className="tk-hint">{t("veRegenerateHint")}</p>
+    </Section>
+  );
+}
+
 // Properties of the selected clip (transform, look, text, audio).
-export default function Inspector({ clip, project, onChange, onApplyCaptionStyle, t }) {
+export default function Inspector({ clip, project, onChange, onApplyCaptionStyle, onRegenerate, busy, t }) {
   if (!clip) return <div className="ve-empty"><i className="ri-cursor-line" /><p>{t("veSelectClip")}</p></div>;
   const media = project.media[clip.mediaId];
   const isText = clip.type === "text" || clip.type === "caption";
@@ -61,6 +81,8 @@ export default function Inspector({ clip, project, onChange, onApplyCaptionStyle
   return (
     <div className="ve-insp">
       <div className="ve-insp-title"><i className={isText ? "ri-text" : isVisual ? "ri-image-line" : "ri-music-2-line"} /> {isText ? t(`veType_${clip.type}`) : media?.name || clip.type}</div>
+
+      {clip.lane === "voice" && clip.text != null && <VoiceSection key={clip.id + clip.mediaId} clip={clip} onRegenerate={onRegenerate} busy={busy} t={t} />}
 
       {isText && (
         <Section title={t("veText")}>
@@ -93,6 +115,10 @@ export default function Inspector({ clip, project, onChange, onApplyCaptionStyle
             <label><input type="checkbox" checked={Boolean(st.outline)} onChange={(e) => style({ outline: e.target.checked })} /> {t("veOutline")}</label>
             <label><input type="checkbox" checked={Boolean(st.shadow)} onChange={(e) => style({ shadow: e.target.checked })} /> {t("veShadow")}</label>
           </div>
+          <div className="ve-checks">
+            <label><input type="checkbox" checked={Boolean(st.karaoke)} onChange={(e) => style({ karaoke: e.target.checked, hl: st.hl || DEFAULT_HIGHLIGHT })} /> {t("veHighlight")}</label>
+          </div>
+          {st.karaoke && <Field label={t("veHighlightColor")}><ColorPick value={st.hl || DEFAULT_HIGHLIGHT} onChange={(c) => style({ hl: c })} /></Field>}
           {st.outline && <Field label={t("veOutlineColor")}><ColorPick value={st.outlineColor || "#000000"} onChange={(c) => style({ outlineColor: c })} /></Field>}
           {clip.type === "caption" && (
             <button type="button" className="tk-btn ghost small" onClick={() => onApplyCaptionStyle(clip)}>

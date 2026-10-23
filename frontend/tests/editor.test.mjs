@@ -149,3 +149,27 @@ test("caption presets restyle every caption", async () => {
   assert.equal(r.clips[0].y, 0.86);
   assert.notEqual(r.clips[1].style.color, "#facc15"); // plain text untouched
 });
+
+test("word highlight follows time, shares it by word length, and survives caption looks", async () => {
+  const M2 = await import("../src/lib/editor/model.js");
+  assert.equal(M2.activeWordIndex([2, 2, 4], 0, 8), 0);
+  assert.equal(M2.activeWordIndex([2, 2, 4], 2.1, 8), 1);
+  assert.equal(M2.activeWordIndex([2, 2, 4], 7.9, 8), 2);
+  assert.equal(M2.activeWordIndex([2, 2, 4], 8, 8), -1);
+  assert.equal(M2.activeWordIndex([], 1, 8), -1);
+  assert.deepEqual(M2.splitWords("hello world").filter((x) => x.word).map((x) => x.s), ["hello", "world"]);
+  assert.ok(M2.splitWords("សួស្តី បង").filter((x) => x.word).length >= 2);
+  let p = M2.newProject();
+  p = M2.addClip(p, M2.makeTextClip({ text: "a b", lane: "caption", type: "caption" }));
+  p = M2.setCaptionHighlight(p, true, "#ff0000");
+  assert.equal(p.clips[0].style.karaoke, true);
+  p = M2.applyCaptionPreset(p, M2.CAPTION_PRESETS[1]);
+  assert.equal(p.clips[0].style.karaoke, true);
+  assert.equal(p.clips[0].style.hl, "#ff0000");
+});
+
+test("audio extraction size estimate (16 kHz mono 16-bit)", async () => {
+  const { estimateWavBytes } = await import("../src/lib/editor/extract.js");
+  assert.equal(estimateWavBytes(60), 60 * 32000 + 44);
+  assert.equal(estimateWavBytes(-5), 44);
+});

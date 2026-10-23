@@ -10,6 +10,7 @@ import { useLanguage } from "../../context/LanguageContext";
 import { useFeedback } from "../../components/ui/Feedback";
 import useToolsStatus from "../../hooks/useToolsStatus";
 import { toolsApi } from "../../services/toolsApi";
+import useSmoothProgress from "../../hooks/useSmoothProgress";
 import { friendlyError } from "../../lib/errors";
 import { transcribeFile } from "../../lib/srtClient";
 import { baseName, formatBytes, formatClock, saveBlob } from "../../lib/download";
@@ -78,6 +79,7 @@ export default function Srt() {
   const [settings, setSettings] = useState(DEFAULTS);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(null);
+  const smooth = useSmoothProgress(progress?.percent ?? 0, busy && Boolean(progress));
   const [error, setError] = useState("");
   const [result, setResult] = useState(null); // { timeline, timing, model, duration, chunks, warnings }
   const [cues, setCues] = useState([]);
@@ -252,8 +254,8 @@ export default function Srt() {
 
         {busy && progress && (
           <div aria-live="polite">
-            <div className="tk-progress" role="progressbar" aria-valuenow={progress.percent} aria-valuemin="0" aria-valuemax="100"><span style={{ width: `${progress.percent}%` }} /></div>
-            <div className="tk-hint" style={{ marginTop: 6 }}>{stageText}</div>
+            <div className="tk-progress" role="progressbar" aria-valuenow={smooth} aria-valuemin="0" aria-valuemax="100"><span style={{ width: `${smooth}%` }} /></div>
+            <div className="tk-hint" style={{ marginTop: 6 }}>{smooth}% · {stageText}</div>
           </div>
         )}
         {error && <div className="tk-alert err" role="alert"><i className="ri-error-warning-line" />{error}</div>}

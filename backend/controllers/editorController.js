@@ -28,13 +28,16 @@ export const MAX_TRANSLATE_CHARS = 30000;
 
 // Pure helper (unit-tested): translates a list of subtitle lines to Khmer with Gemini and
 // returns exactly one Khmer string per input line.
-export async function translateToKhmer({ apiKey, lines, from = "auto" }) {
+export async function translateToKhmer({ apiKey, lines, from = "auto", speakers = false }) {
   const src = LANGS[from] || LANGS.auto;
   const prompt =
     `Translate each subtitle line from ${src} to natural, spoken Khmer (ភាសាខ្មែរ) that a voice actor can read aloud.\n` +
     `Keep the meaning, keep each line short, do not merge or split lines, and do not add notes. ` +
     `Write numbers and names the way Khmer speakers say them.\n` +
-    `Reply with ONLY a JSON array of exactly ${lines.length} strings, in the same order.\n\n` +
+    (speakers
+      ? `The lines are consecutive dialogue. For each line decide the speaker's gender from context (names, pronouns, tone, who is being addressed): "m" male or "f" female; the same speaker keeps the same gender; when unsure use "m".\n` +
+        `Reply with ONLY a JSON array of exactly ${lines.length} objects {"t": "<Khmer text>", "g": "m"|"f"}, in the same order.\n\n`
+      : `Reply with ONLY a JSON array of exactly ${lines.length} strings, in the same order.\n\n`) +
     JSON.stringify(lines);
   try {
     const client = await geminiDeps.createClient(apiKey);
@@ -48,6 +51,7 @@ export async function translateToKhmer({ apiKey, lines, from = "auto" }) {
     if (!arr || arr.length !== lines.length) {
       throw new AppError(502, "BAD_TRANSLATION", "The AI returned an unexpected translation. Please try again.");
     }
+    if (speakers) return arr.map((x) => (typeof x === "string" ? { text: x.trim(), gender: "m" } : { text: String(x?.t ?? x?.text ?? "").trim(), gender: String(x?.g ?? x?.gender ?? "m").toLowerCase().startsWith("f") ? "f" : "m" }));
     return arr.map((x) => String(x ?? "").trim());
   } catch (err) {
     if (err instanceof AppError) throw err;
@@ -62,8 +66,11 @@ export const translate = asyncHandler(async (req, res) => {
   if (lines.length > MAX_TRANSLATE_CUES) throw new AppError(400, "TOO_MANY_LINES", `Translate at most ${MAX_TRANSLATE_CUES} lines at a time.`);
   const clean = lines.map((l) => String(l ?? "").replace(/\s+/g, " ").trim());
   if (clean.join("").length > MAX_TRANSLATE_CHARS) throw new AppError(413, "TEXT_TOO_LONG", "That is too much text to translate at once.");
-  const out = await translateToKhmer({ apiKey: req.gemini.key, lines: clean, from: req.body?.from });
-  res.json({ success: true, data: { lines: out, keySource: req.gemini.source } });
+  const speakers = req.body?.speakers === true;
+  const out = await translateToKhmer({ apiKey: req.gemini.key, lines: clean, from: req.body?.from, speakers });
+  res.json({ success: true, data: speakers
+    ? { lines: out.map((x) => x.text), genders: out.map((x) => x.gender), keySource: req.gemini.source }
+    : { lines: out, keySource: req.gemini.source } });
 });
 
 export const AI_EDIT_COST = 1; // tokens per AI instruction (refunded automatically if it fails)

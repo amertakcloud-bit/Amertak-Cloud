@@ -62,3 +62,9 @@ test("Chinese words are joined without spaces, English with spaces", () => {
   assert.equal(joinWords(["你", "好", "世界"]), "你好世界");
   assert.equal(joinWords(["Hello", "world"]), "Hello world");
 });
+
+test("translateToKhmer with speakers returns text + gender per line", async () => {
+  geminiDeps.createClient = async () => ({ models: { generateContent: async () => ({ text: '[{"t":"សួស្តី","g":"f"},{"t":"បាទ","g":"x"}]' }) } });
+  const out = await translateToKhmer({ apiKey: "k".repeat(10), lines: ["hi", "yes"], speakers: true });
+  assert.deepEqual(out, [{ text: "សួស្តី", gender: "f" }, { text: "បាទ", gender: "m" }]);
+});
