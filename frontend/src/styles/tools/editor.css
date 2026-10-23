@@ -44,7 +44,7 @@
 
 /* bottom: tools + timeline */
 .ve-bottom { flex: none; border-top: 1px solid var(--border); background: var(--surface); display: grid; gap: 0; }
-.ve-tools { display: flex; align-items: center; gap: 4px; padding: 6px 10px; overflow-x: auto; scrollbar-width: thin; }
+.ve-tools { min-height: 46px; flex: none; display: flex; align-items: center; gap: 4px; padding: 6px 10px; overflow-x: auto; scrollbar-width: thin; }
 .ve-tool { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--text); font: inherit; font-size: .8rem; white-space: nowrap; cursor: pointer; flex: none; }
 .ve-tool i { font-size: 1.05rem; }
 .ve-tool:hover:not(:disabled) { background: var(--primary-soft); color: var(--primary); }
