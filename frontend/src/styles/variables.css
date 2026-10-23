@@ -1,0 +1,63 @@
+/* Theme */
+/* CSS variables that control colors across the whole app.
+   Change these to re-theme the entire dashboard. */
+
+:root {
+  --sidebar-width: 260px;
+  --sidebar-collapsed-width: 68px;
+  --header-height: 64px;
+  --radius: 14px;
+  --transition: .2s ease;
+}
+
+/* Dark theme (default) */
+[data-theme="dark"] {
+  --bg: #0b0b10;
+  --grad: linear-gradient(to right, var(--primary-light), var(--primary), var(--primary-light));
+  --reflect: linear-gradient(to right, var(--text), var(--text-muted), var(--text));
+  --surface: #13131c;
+  --surface-hover: #1a1a27;
+  --border: rgba(255, 255, 255, 0.08);
+  --text: #f4f4f7;
+  --text-muted: #9999ad;
+  --primary: #8b5cf6;
+  --primary-light: #e600ff;
+  --primary-hover: #7c4ee0;
+  --primary-soft: rgba(139, 92, 246, 0.15);
+  --shadow: rgba(0, 0, 0, 0.35);
+  --glass-bg: rgba(19, 19, 28, 0.65);
+  --bg-glow-accent: rgba(230, 0, 255, 0.07);
+  --bg-dot: rgba(255, 255, 255, 0.06);
+}
+
+/* Light theme */
+[data-theme="light"] {
+  --bg: #f3f2f8;
+  --grad: linear-gradient(to right, var(--primary-light), var(--primary), var(--primary-light));
+  --reflect: linear-gradient(to right, var(--text), var(--text-muted), var(--text));
+  --surface: #ffffff;
+  --surface-hover: #f1eefc;
+  --border: rgba(20, 10, 40, 0.08);
+  --text: #17151f;
+  --text-muted: #6b6779;
+  --primary: #7c3aed;
+  --primary-light: #e600ff;
+  --primary-hover: #6d28d9;
+  --primary-soft: rgba(124, 58, 237, 0.12);
+  --shadow: rgba(20, 10, 40, 0.1);
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --bg-glow-accent: rgba(124, 58, 237, 0.08);
+  --bg-dot: rgba(60, 30, 120, 0.1);
+}
+
+
+.grad {
+  background: var(--grad);
+  color: transparent;
+  -webkit-background-clip: text;
+}
+.reflect {
+  background: var(--reflect);
+  color: transparent;
+  -webkit-background-clip: text;
+}

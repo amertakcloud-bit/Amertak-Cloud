@@ -1,0 +1,126 @@
+
+.btn-content {
+    display: flex;
+    gap: .5rem;
+    padding: .5rem 0;
+    justify-content: center;
+
+    button {
+        background: var(--text);
+        height: 50px;
+        color: var(--bg);
+        border-radius: 50px;
+        display: flex;
+        gap: 2px;
+        align-items: center;
+        justify-content: center;
+        padding: .3rem;
+        
+        i {
+            font-size: 20px;
+            background: var(--bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50px;
+            color: var(--text);
+            flex-shrink: 0;
+            width: 40px;
+            height: 40px;
+        }
+    
+        span {
+            font-weight: 900;
+            font-size: 20px;
+        }
+    }
+
+    button:nth-child(2) {
+        background: none;
+        color: var(--text);
+        background: var(--bg);
+        border: 1.5px solid var(--text);
+    }
+
+}
+
+.home {
+    margin: 0 auto;
+    text-align: center;
+    h2, .page-subtitle {
+        text-align: center;
+    }
+
+    h2 {
+        font-size: 2.5rem;
+    }
+
+    .page-subtitle {
+        font-family: 'kantumruy';
+        font-size: 2rem;
+    }
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: .5rem;
+    
+    .card {
+        display: block;
+        text-align: start;
+        justify-content: left;
+    
+        li {
+            color: var(--text-muted);
+            line-height: 2;
+            margin-left: 1rem;
+        }
+    }
+    
+    h1 {
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+        font-size: 1rem;
+        font-family: 'Kantumruy';
+    
+        i {
+            font-size: 1.5rem;
+            font-weight: 400;
+        }
+    }
+
+}
+
+
+.getstart {
+    display: flex;
+    flex-wrap: wrap;
+    width: max-content;
+    align-items: center;
+    background: var(--text);
+    color: var(--bg);
+    font-family: 'Kantumruy';
+    font-size: 1.5rem;
+    gap: .5rem;
+    border-radius: 10px;
+    padding: .3rem;
+
+    i {
+        color: var(--text);
+        background: var(--bg);
+        padding: .5rem;
+        border-radius: 7px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+}
+/* Home: features + terms */
+.home-h3 { font-family: Kantumruy, system-ui, sans-serif; color: var(--primary); margin: 28px 0 12px; }
+.home-list { margin: 8px 0 0; padding-left: 1.1rem; display: grid; gap: 6px; color: var(--text-muted); line-height: 1.55; }
+.home-list li { list-style: disc; }
+.home-try { display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; color: var(--primary); font-weight: 600; text-decoration: none; }
+.home-terms-intro { color: var(--text-muted); max-width: 70ch; line-height: 1.6; margin-bottom: 14px; }
+.home-muted { display: block; font-size: .85rem; opacity: .8; margin-top: 4px; }

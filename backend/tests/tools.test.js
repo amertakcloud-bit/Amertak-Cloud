@@ -1,0 +1,199 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { buildPayload, normalizeUrl } from "../services/qr/payload.js";
+import { generateQr, sanitizeQrOptions, deps as qrDeps } from "../services/qr/index.js";
+import { signMediaToken, verifyMediaToken } from "../services/video/sign.js";
+import { isPrivateIp, assertPublicUrl, deps as dnsDeps } from "../services/video/ssrf.js";
+import { detectProvider } from "../services/video/providers.js";
+import { resolveVideo, deps as videoDeps } from "../services/video/index.js";
+import { imageToPrompt, sniffMime } from "../services/imagePrompt/index.js";
+import { deps as geminiDeps } from "../lib/geminiClient.js";
+import { synthesizeSpeech, deps as ttsDeps, ratePct } from "../lib/edgeTts.js";
+import { convertToAudio, deps as ffDeps } from "../services/audio/convert.js";
+import { createQr, createImagePrompt, resolveVideoLink, downloadVideo, getTools, convertAudio } from "../controllers/toolsController.js";
+import { synthesizeText } from "../controllers/ttsController.js";
+import { errorHandler } from "../middleware/errorMiddleware.js";
+import { AppError } from "../lib/AppError.js";
+import { call, makeWav, fakeRes } from "./helpers.js";
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+
+const rejectsCode = async (p, code) => assert.rejects(p, (e) => e.code === code, `expected ${code}`);
+
+test("QR payloads", () => {
+  assert.equal(buildPayload("wifi", { ssid: "My;Net", password: "p:w", encryption: "WPA" }), "WIFI:T:WPA;S:My\\;Net;P:p\\:w;H:false;;");
+  assert.equal(buildPayload("wifi", { ssid: "Open", encryption: "nopass" }), "WIFI:T:nopass;S:Open;P:;H:false;;");
+  assert.equal(buildPayload("email", { to: "a@b.co", subject: "Hi there" }), "mailto:a@b.co?subject=Hi%20there");
+  assert.equal(buildPayload("phone", { phone: "+855 12 345 678" }), "tel:+85512345678");
+  assert.match(buildPayload("vcard", { name: "Sok", phone: "012345678" }), /^BEGIN:VCARD\nVERSION:3.0\nFN:Sok/);
+  assert.equal(buildPayload("text", { text: "សួស្តី" }), "សួស្តី");
+  assert.equal(normalizeUrl("example.com/a"), "https://example.com/a");
+  assert.throws(() => normalizeUrl("javascript:alert(1)"), (e) => e.code === "INVALID_QR_DATA");
+  assert.throws(() => buildPayload("email", { to: "bad" }), (e) => e.code === "INVALID_QR_DATA");
+  assert.throws(() => buildPayload("nope", {}), (e) => e.code === "INVALID_QR_TYPE");
+  assert.throws(() => buildPayload("wifi", { ssid: "x", encryption: "WPA" }), (e) => e.code === "INVALID_QR_DATA");
+});
+
+test("QR options + generation with injected lib", async () => {
+  assert.throws(() => sanitizeQrOptions({ dark: "#eeeeee", light: "#ffffff" }), (e) => e.code === "LOW_CONTRAST");
+  assert.throws(() => sanitizeQrOptions({ dark: "#ffffff", light: "#000000" }), (e) => e.code === "LOW_CONTRAST");
+  assert.equal(sanitizeQrOptions({ size: 99999 }).size, 2048);
+  assert.equal(sanitizeQrOptions({ ecc: "Z" }).ecc, "M");
+  let seen;
+  qrDeps.loadQr = async () => ({ toBuffer: async (t, o) => { seen = { t, o }; return Buffer.from("PNG"); }, toString: async () => "<svg/>" });
+  const png = await generateQr("url", { url: "example.com" }, { size: 300, ecc: "H" });
+  assert.equal(png.contentType, "image/png");
+  assert.equal(seen.t, "https://example.com/");
+  assert.equal(seen.o.errorCorrectionLevel, "H");
+  const svg = await generateQr("text", { text: "x" }, { format: "svg" });
+  assert.equal(svg.ext, "svg");
+  qrDeps.loadQr = async () => ({ toBuffer: async () => { throw new Error("The amount of data is too big"); } });
+  await rejectsCode(generateQr("text", { text: "x" }, {}), "QR_TOO_LARGE");
+  const { res } = await call(createQr, { body: { type: "bogus" } }).then((r) => ({ res: r.err }));
+  assert.equal(res.code, "INVALID_QR_TYPE");
+});
+
+test("signed media tokens", () => {
+  const t = signMediaToken({ url: "https://a.b/c.mp4", name: "x.mp4" }, 60, 1_000_000);
+  assert.deepEqual(verifyMediaToken(t, 1_000_000 + 30_000), { url: "https://a.b/c.mp4", name: "x.mp4" });
+  assert.throws(() => verifyMediaToken(t, 1_000_000 + 61_000), (e) => e.code === "TOKEN_EXPIRED");
+  const [p, s] = t.split(".");
+  assert.throws(() => verifyMediaToken(`${p}.${s.slice(0, -2)}AA`), (e) => e.code === "INVALID_TOKEN");
+  const forged = Buffer.from(JSON.stringify({ u: "http://127.0.0.1/", n: "x", e: 9e12 })).toString("base64url");
+  assert.throws(() => verifyMediaToken(`${forged}.${s}`), (e) => e.code === "INVALID_TOKEN");
+  assert.throws(() => verifyMediaToken("garbage"), (e) => e.code === "INVALID_TOKEN");
+});
+
+test("SSRF guard", async () => {
+  for (const ip of ["127.0.0.1", "10.0.0.5", "172.16.0.1", "192.168.1.1", "169.254.169.254", "0.0.0.0", "::1", "fd00::1", "fe80::1", "::ffff:127.0.0.1", "100.64.0.1"]) assert.ok(isPrivateIp(ip), ip);
+  for (const ip of ["8.8.8.8", "1.1.1.1", "2606:4700:4700::1111"]) assert.ok(!isPrivateIp(ip), ip);
+  dnsDeps.lookup = async (h) => (h === "evil.test" ? [{ address: "10.1.1.1" }] : h === "mixed.test" ? [{ address: "8.8.8.8" }, { address: "127.0.0.1" }] : [{ address: "93.184.216.34" }]);
+  await rejectsCode(assertPublicUrl("http://localhost/x"), "BLOCKED_URL");
+  await rejectsCode(assertPublicUrl("http://evil.test/x"), "BLOCKED_URL");
+  await rejectsCode(assertPublicUrl("http://mixed.test/x"), "BLOCKED_URL");
+  await rejectsCode(assertPublicUrl("http://127.0.0.1/x"), "BLOCKED_URL");
+  await rejectsCode(assertPublicUrl("http://[::1]/x"), "BLOCKED_URL");
+  await rejectsCode(assertPublicUrl("file:///etc/passwd"), "INVALID_URL");
+  await rejectsCode(assertPublicUrl("http://u:p@good.test/"), "INVALID_URL");
+  await rejectsCode(assertPublicUrl("http://good.test:8080/"), "INVALID_URL");
+  assert.equal((await assertPublicUrl("https://good.test/a")).hostname, "good.test");
+});
+
+test("video: provider detection, resolve, download token", async () => {
+  assert.equal(detectProvider("https://www.tiktok.com/@a/video/1"), "tiktok");
+  assert.equal(detectProvider("https://vm.tiktok.com/abc"), "tiktok");
+  assert.equal(detectProvider("https://pin.it/abc"), "pinterest");
+  assert.equal(detectProvider("https://www.pinterest.com/pin/1/"), "pinterest");
+  assert.equal(detectProvider("https://youtu.be/x"), "unsupported");
+  assert.equal(detectProvider("https://cdn.example.com/a.mp4"), "direct");
+  dnsDeps.lookup = async () => [{ address: "93.184.216.34" }];
+  videoDeps.fetchTikTok = async () => ({ provider: "tiktok", title: "Hello/World?", author: "me", duration: 5, thumbnail: null, formats: [{ id: "video-HD", label: "HD", kind: "video", ext: "mp4", url: "https://cdn.test/v.mp4" }] });
+  const r = await resolveVideo("tiktok.com/@a/video/1");
+  assert.equal(r.formats.length, 1);
+  assert.equal(r.formats[0].url, undefined, "raw URL must not leak");
+  assert.equal(verifyMediaToken(r.formats[0].token).name, "Hello World.mp4");
+  await rejectsCode(resolveVideo("https://youtube.com/watch?v=1"), "UNSUPPORTED_SITE");
+  await rejectsCode(resolveVideo(""), "INVALID_URL");
+  await rejectsCode(resolveVideo("http://127.0.0.1/a.mp4"), "BLOCKED_URL");
+  const bad = await call(downloadVideo, { query: { token: "x.y" } });
+  assert.equal(bad.err.code, "INVALID_TOKEN");
+  const ok = await call(resolveVideoLink, { body: { url: "https://www.tiktok.com/@a/video/1" } });
+  assert.equal(ok.res.body.success, true);
+});
+
+test("image → prompt", async () => {
+  const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(20)]);
+  assert.equal(sniffMime(png), "image/png");
+  assert.equal(sniffMime(Buffer.from("GIF89a....")), null);
+  let sent;
+  geminiDeps.createClient = async () => ({ models: { generateContent: async (a) => { sent = a; return { text: '{"prompt":"A red fox","negativePrompt":"blur","tags":["fox"],"title":"Fox"}' }; } } });
+  const r = await imageToPrompt({ apiKey: "AQ.fake-key-123", image: png, style: "midjourney", language: "km" });
+  assert.equal(r.prompt, "A red fox");
+  assert.match(sent.contents[0].parts[1].text, /Khmer/);
+  assert.equal(sent.contents[0].parts[0].inlineData.mimeType, "image/png");
+  await rejectsCode(imageToPrompt({ apiKey: "k", image: Buffer.from("not an image at all") }), "UNSUPPORTED_IMAGE");
+  await rejectsCode(imageToPrompt({ apiKey: "k", image: png, style: "zzz" }), "INVALID_STYLE");
+  geminiDeps.createClient = async () => ({ models: { generateContent: async () => ({ text: '{"prompt":""}' }) } });
+  await rejectsCode(imageToPrompt({ apiKey: "k", image: png }), "EMPTY_RESULT");
+  const noFile = await call(createImagePrompt, { gemini: { key: "k", source: "user" }, body: {} });
+  assert.equal(noFile.err.code, "NO_FILE");
+});
+
+test("TTS", async () => {
+  assert.equal(ratePct(500), "+100%");
+  assert.equal(ratePct(-80), "-50%");
+  let opts;
+  ttsDeps.createTts = async (o) => { opts = o; return { ttsPromise: async (_t, file) => (await import("node:fs/promises")).writeFile(file, Buffer.from("ID3audio")) }; };
+  const r = await synthesizeSpeech("សួស្តី", { voice: "sreymom", rate: 20 });
+  assert.equal(r.voice, "km-KH-SreymomNeural");
+  assert.equal(opts.rate, "+20%");
+  assert.equal(opts.lang, "km-KH");
+  assert.equal(r.audio.toString(), "ID3audio");
+  await rejectsCode(synthesizeSpeech("hi", { voice: "bogus" }), "INVALID_VOICE");
+  await rejectsCode(synthesizeSpeech("   "), "EMPTY_TEXT");
+  ttsDeps.createTts = async () => ({ ttsPromise: async () => { throw new Error("ECONNRESET"); } });
+  await rejectsCode(synthesizeSpeech("hi"), "TTS_UNAVAILABLE");
+  const long = await call(synthesizeText, { body: { text: "x".repeat(3001) } });
+  assert.equal(long.err.code, "TEXT_TOO_LONG");
+});
+
+test("audio conversion (real ffmpeg)", async (t) => {
+  let ff;
+  try { ff = execFileSync("which", ["ffmpeg"]).toString().trim(); } catch { return t.skip("no ffmpeg"); }
+  ffDeps.ffmpegPath = async () => ff;
+  const wav = makeWav([{ sec: 1, tone: 440 }]);
+  const mp3 = await convertToAudio(wav, { format: "mp3", bitrate: 128 });
+  assert.equal(mp3.type, "audio/mpeg");
+  assert.ok(mp3.audio.length > 1000);
+  const m4a = await convertToAudio(wav, { format: "m4a" });
+  assert.equal(m4a.audio.slice(4, 8).toString(), "ftyp");
+  const ogg = await convertToAudio(wav, { format: "ogg" });
+  assert.equal(ogg.audio.slice(0, 4).toString(), "OggS");
+  const out = await convertToAudio(wav, { format: "wav", startSec: 0.5 });
+  assert.ok(out.audio.length < wav.length);
+  await rejectsCode(convertToAudio(Buffer.from("hello world, not media"), { format: "mp3" }), "UNSUPPORTED_MEDIA");
+  await rejectsCode(convertToAudio(wav, { format: "exe" }), "INVALID_FORMAT");
+  const trunc = Buffer.concat([Buffer.from("RIFF"), Buffer.alloc(30)]);
+  await rejectsCode(convertToAudio(trunc, { format: "mp3" }), "CONVERT_FAILED");
+  const r = await call(convertAudio, { file: { buffer: wav }, body: { format: "mp3", name: "សំឡេង.mp4" } });
+  assert.match(r.res.headers["content-disposition"], /filename\*=UTF-8''%E1%9E/);
+});
+
+test("tools status + error handler shape", async () => {
+  const { res } = await call(getTools, {});
+  assert.equal(res.body.data.tools.qr.available, true);
+  assert.deepEqual(res.body.data.tools.audio.formats, ["mp3", "m4a", "ogg", "wav"]);
+  const r = fakeRes();
+  errorHandler(new AppError(422, "X_CODE", "Bad thing"), {}, r, () => {});
+  assert.equal(r.statusCode, 422);
+  assert.deepEqual({ ...r.body }, { success: false, message: "Bad thing", code: "X_CODE" });
+  const r2 = fakeRes();
+  errorHandler(new Error("boom AIzaSyA1234567890abcdefghijklmnopqrstuv"), {}, r2, () => {});
+  assert.equal(r2.statusCode, 500);
+  assert.ok(!JSON.stringify(r2.body).includes("AIzaSy"));
+});
+
+// ── QR image storage ──
+import { sniffImage, saveQrImage, readQrImage, listQrImages, deleteQrImage, __setQrImageModel } from "../services/qrImageService.js";
+test("qr image: sniff, save, read, list, delete (fake model)", async () => {
+  const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(32)]);
+  assert.equal(sniffImage(png), "image/png");
+  assert.equal(sniffImage(Buffer.from("<svg xmlns='x'><script>1</script></svg>")), null);
+  const rows = [];
+  __setQrImageModel({
+    countDocuments: async (q) => rows.filter((r) => r.owner === q.owner).length,
+    create: async (d) => rows.push({ ...d }),
+    findOneAndUpdate: () => ({ select: async () => rows[0] ? { mimeType: rows[0].mimeType, data: rows[0].data } : null }),
+    find: (q) => ({ sort: () => ({ limit: () => ({ select: () => ({ lean: async () => rows.filter((r) => r.owner === q.owner) }) }) }) }),
+    deleteOne: async (q) => { const i = rows.findIndex((r) => r.imageId === q.imageId && r.owner === q.owner); if (i >= 0) rows.splice(i, 1); return { deletedCount: i >= 0 ? 1 : 0 }; },
+  });
+  await assert.rejects(saveQrImage({ owner: "u1", name: "x.svg", buffer: Buffer.from("<svg xmlns='http://www.w3.org/2000/svg'></svg>") }), { code: "BAD_IMAGE" });
+  const s = await saveQrImage({ owner: "u1", name: "a/b.png", buffer: png });
+  assert.match(s.imageId, /^[A-Za-z0-9_-]{6,}$/);
+  assert.equal((await readQrImage(s.imageId)).mimeType, "image/png");
+  assert.equal(await readQrImage("../etc"), null);
+  assert.equal((await listQrImages("u1")).length, 1);
+  assert.equal(await deleteQrImage("u2", s.imageId), false); // not the owner
+  assert.equal(await deleteQrImage("u1", s.imageId), true);
+  __setQrImageModel(null);
+});

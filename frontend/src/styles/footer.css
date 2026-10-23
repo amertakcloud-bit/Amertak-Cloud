@@ -1,0 +1,31 @@
+/* Footer — clean, responsive */
+.site-footer {
+  margin: 24px 0 0;
+  padding: 28px clamp(16px, 4vw, 28px) 16px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+}
+.sf-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr;
+  gap: 28px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+.sf-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.sf-col h4 { margin: 0 0 4px; font-size: .95rem; font-weight: 700; color: var(--text); }
+.sf-col a { color: var(--text-muted); text-decoration: none; font-size: .92rem; width: fit-content; transition: color .15s, transform .15s; }
+.sf-col a:hover { color: var(--primary); transform: translateX(2px); }
+.sf-brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 1.1rem; }
+.sf-about p { margin: 0; color: var(--text-muted); font-size: .92rem; line-height: 1.6; max-width: 38ch; }
+.sf-social { display: flex; flex-direction: column; gap: 8px; }
+.sf-social a { display: inline-flex; align-items: center; gap: 8px; }
+.sf-social i { font-size: 1.15rem; color: var(--primary); }
+.sf-bottom { max-width: 1100px; margin: 22px auto 0; padding-top: 14px; border-top: 1px solid var(--border); text-align: center; color: var(--text-muted); font-size: .82rem; }
+@media (max-width: 760px) {
+  .sf-grid { grid-template-columns: 1fr 1fr; }
+  .sf-about { grid-column: 1 / -1; }
+}
+@media (max-width: 440px) {
+  .sf-grid { grid-template-columns: 1fr; gap: 20px; }
+}
