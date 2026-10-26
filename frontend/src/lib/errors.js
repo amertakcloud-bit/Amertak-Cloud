@@ -5,7 +5,10 @@ export function friendlyError(err, t) {
   if (code && code !== "ERROR") {
     const key = `err_${code}`;
     const tr = t(key);
-    if (tr && tr !== key) return tr;
+    if (tr && tr !== key) {
+      const why = code === "TTS_UNAVAILABLE" && /Reason: (.+)$/.exec(err?.message || "");
+      return why ? `${tr} (${why[1]})` : tr; // show the real reason so it can be fixed
+    }
   }
   return err?.message || t("err_UNKNOWN");
 }

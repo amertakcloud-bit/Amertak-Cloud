@@ -205,10 +205,13 @@ test("TTS falls back: Edge fails (both versions) → Google voice; all fail → 
   ttsDeps.synthesize = (await import("../lib/edgeTts.js")).defaultSynthesize; // restore orchestrator
   ttsDeps.synthesizeEdge = async ({ chrome }) => { calls.push(chrome); throw new Error("HTTP 403"); };
   ttsDeps.synthesizeGoogle = async () => Buffer.from("ID3google");
+  const off = await synthesizeSpeech("សួស្តី").catch((e) => e); // fallback is OFF by default → never a wrong voice
+  assert.equal(off.code, "TTS_UNAVAILABLE");
+  process.env.TTS_ALLOW_FALLBACK = "true";
   const r = await synthesizeSpeech("សួស្តី", { voice: "piseth" });
   assert.equal(r.provider, "google");
   assert.equal(r.audio.toString(), "ID3google");
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 6);
   ttsDeps.synthesizeGoogle = async () => { throw new Error("google HTTP 429"); };
   const err = await synthesizeSpeech("hi").catch((e) => e);
   assert.equal(err.code, "TTS_UNAVAILABLE");

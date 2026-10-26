@@ -100,8 +100,11 @@ export const deps = {
       try { return { audio: await deps.synthesizeEdge({ ...options, chrome }), provider: "edge", errors }; }
       catch (e) { errors.push(`edge(${chrome.split(".")[0]}): ${e.message}`); }
     }
-    try { return { audio: await deps.synthesizeGoogle(options), provider: "google", errors }; }
-    catch (e) { errors.push(`google: ${e.message}`); }
+    // Google has only ONE (non Piseth/Sreymom) voice, so it is used only when explicitly allowed.
+    if (process.env.TTS_ALLOW_FALLBACK === "true") {
+      try { return { audio: await deps.synthesizeGoogle(options), provider: "google", errors }; }
+      catch (e) { errors.push(`google: ${e.message}`); }
+    }
     const err = new Error(errors.join(" | ")); err.errors = errors; throw err;
   },
 };
@@ -144,7 +147,7 @@ export async function synthesizeSpeech(text, { voice, rate = 0, pitch = 0, volum
   }
   console.error("[tts] failed:", lastErr?.message);
   const detail = String(lastErr?.message || "").slice(0, 400);
-  throw new AppError(502, "TTS_UNAVAILABLE", "The voice service (Microsoft Edge TTS) could not be reached. Please try again in a moment.", detail);
+  throw new AppError(502, "TTS_UNAVAILABLE", `The Piseth/Sreymom voice service (Microsoft Edge TTS) could not be reached. Reason: ${detail.slice(0, 160) || "unknown"}`, detail);
 }
 
 // Used by GET /api/tts/diagnose: runs every provider once so the real failure reason is visible.
