@@ -1,6 +1,6 @@
 import { AppError } from "../lib/AppError.js";
 import { asyncHandler } from "../middleware/errorMiddleware.js";
-import { KHMER_VOICES, synthesizeSpeech } from "../lib/edgeTts.js";
+import { KHMER_VOICES, diagnose, synthesizeSpeech } from "../lib/edgeTts.js";
 
 export const MAX_TEXT_LENGTH = 3000;
 
@@ -28,6 +28,12 @@ export const synthesizeText = asyncHandler(async (req, res) => {
     "Content-Disposition": 'inline; filename="khmer-voice.mp3"',
     "Cache-Control": "no-store",
     "X-Voice": out.voice,
+    "X-TTS-Provider": out.provider,
   });
   res.send(out.audio);
+});
+
+export const ttsDiagnose = asyncHandler(async (_req, res) => {
+  const results = await diagnose();
+  res.json({ success: true, working: results.some((r) => r.ok), results });
 });

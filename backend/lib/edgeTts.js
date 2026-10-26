@@ -15,7 +15,7 @@ export const KHMER_TTS_VOICES = { piseth: KHMER_VOICES[0].value, sreymom: KHMER_
 // Pure-JS Edge read-aloud client (WebSocket, all in memory — nothing is written to disk, so it is
 // safe on Vercel). Includes the Sec-MS-GEC token Microsoft now requires (older clients get 403).
 const TOKEN = "6A5AA1D4EAFF4E9FB37E23D68491D6F4";
-const CHROME = "130.0.2849.68";
+const CHROME_VERSIONS = ["143.0.3650.75", "130.0.2849.68"]; // tried in order (Microsoft rejects very old ones)
 const WS_URL = "wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1";
 
 export function secMsGec(now = Date.now(), skewMs = 0) {
@@ -24,11 +24,11 @@ export function secMsGec(now = Date.now(), skewMs = 0) {
   return createHash("sha256").update(`${ticks * 1e7}${TOKEN}`).digest("hex").toUpperCase();
 }
 const esc = (t) => t.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[c]);
-const stamp = () => new Date().toUTCString().replace("GMT", "GMT+0000 (Coordinated Universal Time)");
+const stamp = () => new Date().toUTCString().replace(/^(\w+), (\d+) (\w+) (\d+)/, "$1 $3 $2 $4").replace("GMT", "GMT+0000 (Coordinated Universal Time)");
 
 export const deps = {
   // Returns an MP3 Buffer. Replaceable in tests.
-  async synthesize({ text, voice, rate, pitch, volume, outputFormat, timeout }) {
+  async synthesizeEdge({ text, voice, rate, pitch, volume, outputFormat, timeout, chrome = CHROME_VERSIONS[0] }) {
     const { default: WebSocket } = await import("ws");
     const id = randomUUID().replace(/-/g, "");
     const ssml = `<speak version='1.0' xmlns='http://www.w3.org/2001/XMLSchema' xml:lang='km-KH'><voice name='${voice}'><prosody pitch='${pitch}' rate='${rate}' volume='${volume}'>${esc(text)}</prosody></voice></speak>`;
@@ -36,13 +36,14 @@ export const deps = {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         return await new Promise((resolve, reject) => {
-          const url = `${WS_URL}?TrustedClientToken=${TOKEN}&Sec-MS-GEC=${secMsGec(Date.now(), skew)}&Sec-MS-GEC-Version=1-${CHROME}&ConnectionId=${id}`;
+          const url = `${WS_URL}?TrustedClientToken=${TOKEN}&Sec-MS-GEC=${secMsGec(Date.now(), skew)}&Sec-MS-GEC-Version=1-${chrome}&ConnectionId=${id}`;
           const ws = new WebSocket(url, {
             headers: {
               Pragma: "no-cache", "Cache-Control": "no-cache",
               Origin: "chrome-extension://jdiccldimpdaibmpdkjnbmckianbfold",
-              "User-Agent": `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${CHROME.split(".")[0]}.0.0.0 Safari/537.36 Edg/${CHROME.split(".")[0]}.0.0.0`,
+              "User-Agent": `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chrome.split(".")[0]}.0.0.0 Safari/537.36 Edg/${chrome.split(".")[0]}.0.0.0`,
               "Accept-Language": "en-US,en;q=0.9",
+              Cookie: `muid=${randomUUID().replace(/-/g, "").toUpperCase()};`,
             },
           });
           const chunks = [];
@@ -75,7 +76,37 @@ export const deps = {
       }
     }
   },
+
+  // Fallback provider: Google Translate voice (Khmer, one voice, no rate/pitch). Max ~200 characters per request.
+  async synthesizeGoogle({ text, timeout }) {
+    const parts = [];
+    for (const sentence of text.split(/(?<=[។៕?!.])\s*/u)) {
+      for (let i = 0; i < sentence.length; i += 170) parts.push(sentence.slice(i, i + 170));
+    }
+    const bufs = [];
+    for (const q of parts.filter((x) => x.trim())) {
+      const url = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=km&q=${encodeURIComponent(q)}`;
+      const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/143.0.0.0 Safari/537.36", Referer: "https://translate.google.com/" }, signal: AbortSignal.timeout(timeout) });
+      if (!res.ok) throw new Error(`google HTTP ${res.status}`);
+      bufs.push(Buffer.from(await res.arrayBuffer()));
+    }
+    return Buffer.concat(bufs);
+  },
+
+  // Tries every provider in order; returns { audio, provider, errors }.
+  async synthesize(options) {
+    const errors = [];
+    for (const chrome of CHROME_VERSIONS) {
+      try { return { audio: await deps.synthesizeEdge({ ...options, chrome }), provider: "edge", errors }; }
+      catch (e) { errors.push(`edge(${chrome.split(".")[0]}): ${e.message}`); }
+    }
+    try { return { audio: await deps.synthesizeGoogle(options), provider: "google", errors }; }
+    catch (e) { errors.push(`google: ${e.message}`); }
+    const err = new Error(errors.join(" | ")); err.errors = errors; throw err;
+  },
 };
+
+export const defaultSynthesize = deps.synthesize;
 
 export function normalizeVoice(voice) {
   const raw = String(voice || "").trim();
@@ -102,14 +133,32 @@ export async function synthesizeSpeech(text, { voice, rate = 0, pitch = 0, volum
   let lastErr;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const audio = await deps.synthesize(options);
+      const r = await deps.synthesize(options);
+      const audio = Buffer.isBuffer(r) ? r : r?.audio; // tests may return a bare Buffer
       if (!audio?.length) throw new Error("empty audio");
-      return { audio, voice: v, contentType: "audio/mpeg" };
+      return { audio, voice: v, contentType: "audio/mpeg", provider: r?.provider || "edge" };
     } catch (err) {
       if (err instanceof AppError) throw err;
       lastErr = err;
     }
   }
   console.error("[tts] failed:", lastErr?.message);
-  throw new AppError(502, "TTS_UNAVAILABLE", "The voice service (Microsoft Edge TTS) could not be reached. Please try again in a moment.", String(lastErr?.message || "").slice(0, 200));
+  const detail = String(lastErr?.message || "").slice(0, 400);
+  throw new AppError(502, "TTS_UNAVAILABLE", "The voice service (Microsoft Edge TTS) could not be reached. Please try again in a moment.", detail);
+}
+
+// Used by GET /api/tts/diagnose: runs every provider once so the real failure reason is visible.
+export async function diagnose() {
+  const base = { text: "សួស្តី", voice: KHMER_VOICES[0].value, rate: "+0%", pitch: "+0Hz", volume: "+0%", outputFormat: "audio-24khz-48kbitrate-mono-mp3", timeout: 12000 };
+  const out = [];
+  const t0 = () => Date.now();
+  for (const chrome of CHROME_VERSIONS) {
+    const s = t0();
+    try { const a = await deps.synthesizeEdge({ ...base, chrome }); out.push({ provider: `edge ${chrome}`, ok: a.length > 0, bytes: a.length, ms: Date.now() - s }); }
+    catch (e) { out.push({ provider: `edge ${chrome}`, ok: false, error: String(e.message).slice(0, 200), ms: Date.now() - s }); }
+  }
+  const s = t0();
+  try { const a = await deps.synthesizeGoogle(base); out.push({ provider: "google", ok: a.length > 0, bytes: a.length, ms: Date.now() - s }); }
+  catch (e) { out.push({ provider: "google", ok: false, error: String(e.message).slice(0, 200), ms: Date.now() - s }); }
+  return out;
 }

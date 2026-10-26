@@ -199,3 +199,21 @@ test("qr image: sniff, save, read, list, delete (fake model)", async () => {
   assert.equal(await deleteQrImage("u1", s.imageId), true);
   __setQrImageModel(null);
 });
+
+test("TTS falls back: Edge fails (both versions) → Google voice; all fail → clear error + diagnose", async () => {
+  const calls = [];
+  ttsDeps.synthesize = (await import("../lib/edgeTts.js")).defaultSynthesize; // restore orchestrator
+  ttsDeps.synthesizeEdge = async ({ chrome }) => { calls.push(chrome); throw new Error("HTTP 403"); };
+  ttsDeps.synthesizeGoogle = async () => Buffer.from("ID3google");
+  const r = await synthesizeSpeech("សួស្តី", { voice: "piseth" });
+  assert.equal(r.provider, "google");
+  assert.equal(r.audio.toString(), "ID3google");
+  assert.equal(calls.length, 2);
+  ttsDeps.synthesizeGoogle = async () => { throw new Error("google HTTP 429"); };
+  const err = await synthesizeSpeech("hi").catch((e) => e);
+  assert.equal(err.code, "TTS_UNAVAILABLE");
+  assert.match(String(err.details), /HTTP 403.*google HTTP 429/);
+  const { diagnose } = await import("../lib/edgeTts.js");
+  const d = await diagnose();
+  assert.equal(d.length, 3); assert.ok(d.every((x) => x.ok === false && x.error));
+});
