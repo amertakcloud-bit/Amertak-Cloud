@@ -211,12 +211,22 @@ test("TTS falls back: Edge fails (both versions) → Google voice; all fail → 
   const r = await synthesizeSpeech("សួស្តី", { voice: "piseth" });
   assert.equal(r.provider, "google");
   assert.equal(r.audio.toString(), "ID3google");
-  assert.equal(calls.length, 6);
+  assert.equal(calls.length, 9);
   ttsDeps.synthesizeGoogle = async () => { throw new Error("google HTTP 429"); };
   const err = await synthesizeSpeech("hi").catch((e) => e);
   assert.equal(err.code, "TTS_UNAVAILABLE");
   assert.match(String(err.details), /HTTP 403.*google HTTP 429/);
   const { diagnose } = await import("../lib/edgeTts.js");
   const d = await diagnose();
-  assert.equal(d.length, 3); assert.ok(d.every((x) => x.ok === false && x.error));
+  assert.equal(d.length, 4); assert.ok(d.every((x) => x.ok === false && x.error));
+});
+
+test("TTS uses Azure Speech first when configured (same Piseth/Sreymom voices)", async () => {
+  ttsDeps.synthesize = (await import("../lib/edgeTts.js")).defaultSynthesize;
+  process.env.AZURE_SPEECH_KEY = "k"; process.env.AZURE_SPEECH_REGION = "southeastasia";
+  let seen; ttsDeps.synthesizeAzure = async (o) => { seen = o; return Buffer.from("ID3azure"); };
+  ttsDeps.synthesizeEdge = async () => { throw new Error("must not be called"); };
+  const r = await synthesizeSpeech("សួស្តី", { voice: "sreymom" });
+  assert.equal(r.provider, "azure"); assert.equal(seen.voice, "km-KH-SreymomNeural");
+  delete process.env.AZURE_SPEECH_KEY; delete process.env.AZURE_SPEECH_REGION; delete process.env.TTS_ALLOW_FALLBACK;
 });

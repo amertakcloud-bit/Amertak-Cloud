@@ -15,7 +15,7 @@ export const KHMER_TTS_VOICES = { piseth: KHMER_VOICES[0].value, sreymom: KHMER_
 // Pure-JS Edge read-aloud client (WebSocket, all in memory — nothing is written to disk, so it is
 // safe on Vercel). Includes the Sec-MS-GEC token Microsoft now requires (older clients get 403).
 const TOKEN = "6A5AA1D4EAFF4E9FB37E23D68491D6F4";
-const CHROME_VERSIONS = ["143.0.3650.75", "130.0.2849.68"]; // tried in order (Microsoft rejects very old ones)
+const CHROME_VERSIONS = ["143.0.3650.75", "130.0.2849.68", "130.0.2849.68:min"]; // tried in order (Microsoft rejects very old ones)
 const WS_URL = "wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1";
 
 export function secMsGec(now = Date.now(), skewMs = 0) {
@@ -28,7 +28,9 @@ const stamp = () => new Date().toUTCString().replace(/^(\w+), (\d+) (\w+) (\d+)/
 
 export const deps = {
   // Returns an MP3 Buffer. Replaceable in tests.
-  async synthesizeEdge({ text, voice, rate, pitch, volume, outputFormat, timeout, chrome = CHROME_VERSIONS[0] }) {
+  async synthesizeEdge({ text, voice, rate, pitch, volume, outputFormat, timeout, chrome: variant = CHROME_VERSIONS[0] }) {
+    const minimal = variant.endsWith(":min"); // the plain handshake of the old node-edge-tts package
+    const chrome = variant.replace(":min", "");
     const { default: WebSocket } = await import("ws");
     const id = randomUUID().replace(/-/g, "");
     const ssml = `<speak version='1.0' xmlns='http://www.w3.org/2001/XMLSchema' xml:lang='km-KH'><voice name='${voice}'><prosody pitch='${pitch}' rate='${rate}' volume='${volume}'>${esc(text)}</prosody></voice></speak>`;
@@ -36,21 +38,21 @@ export const deps = {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         return await new Promise((resolve, reject) => {
-          const url = `${WS_URL}?TrustedClientToken=${TOKEN}&Sec-MS-GEC=${secMsGec(Date.now(), skew)}&Sec-MS-GEC-Version=1-${chrome}&ConnectionId=${id}`;
+          const url = `${WS_URL}?TrustedClientToken=${TOKEN}&Sec-MS-GEC=${secMsGec(Date.now(), skew)}&Sec-MS-GEC-Version=1-${chrome}${minimal ? "" : `&ConnectionId=${id}`}`;
           const ws = new WebSocket(url, {
             headers: {
-              Pragma: "no-cache", "Cache-Control": "no-cache",
+              ...(minimal ? {} : { Pragma: "no-cache", "Cache-Control": "no-cache" }),
               Origin: "chrome-extension://jdiccldimpdaibmpdkjnbmckianbfold",
               "User-Agent": `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chrome.split(".")[0]}.0.0.0 Safari/537.36 Edg/${chrome.split(".")[0]}.0.0.0`,
               "Accept-Language": "en-US,en;q=0.9",
-              Cookie: `muid=${randomUUID().replace(/-/g, "").toUpperCase()};`,
+              ...(minimal ? {} : { Cookie: `muid=${randomUUID().replace(/-/g, "").toUpperCase()};` }),
             },
           });
           const chunks = [];
           const timer = setTimeout(() => { ws.terminate(); reject(new Error("timeout")); }, timeout);
           const fail = (e) => { clearTimeout(timer); reject(e); };
           ws.on("unexpected-response", (_req, res) => {
-            const e = new Error(`HTTP ${res.statusCode}`); e.status = res.statusCode; e.date = res.headers?.date; fail(e); ws.terminate();
+            const e = new Error(`HTTP ${res.statusCode}`); e.status = res.statusCode; e.date = res.headers?.date; fail(e); ws.terminate(); res.resume?.();
           });
           ws.on("error", fail);
           ws.on("open", () => {
@@ -77,6 +79,24 @@ export const deps = {
     }
   },
 
+
+  // Official Azure Speech REST API — same neural voices (km-KH-PisethNeural / SreymomNeural), not blocked on
+  // cloud IPs. Free tier F0: 500 000 characters / month. Needs AZURE_SPEECH_KEY + AZURE_SPEECH_REGION.
+  async synthesizeAzure({ text, voice, rate, pitch, volume, outputFormat, timeout }) {
+    const key = process.env.AZURE_SPEECH_KEY;
+    const region = process.env.AZURE_SPEECH_REGION;
+    if (!key || !region) throw new Error("azure not configured");
+    const ssml = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='km-KH'><voice name='${voice}'><prosody pitch='${pitch}' rate='${rate}' volume='${volume}'>${esc(text)}</prosody></voice></speak>`;
+    const res = await fetch(`https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`, {
+      method: "POST",
+      headers: { "Ocp-Apim-Subscription-Key": key, "Content-Type": "application/ssml+xml", "X-Microsoft-OutputFormat": outputFormat, "User-Agent": "AmertakCloud" },
+      body: ssml,
+      signal: AbortSignal.timeout(timeout),
+    });
+    if (!res.ok) throw new Error(`azure HTTP ${res.status} ${(await res.text().catch(() => "")).slice(0, 120)}`);
+    return Buffer.from(await res.arrayBuffer());
+  },
+
   // Fallback provider: Google Translate voice (Khmer, one voice, no rate/pitch). Max ~200 characters per request.
   async synthesizeGoogle({ text, timeout }) {
     const parts = [];
@@ -93,12 +113,33 @@ export const deps = {
     return Buffer.concat(bufs);
   },
 
+  // Edge TTS running on ANOTHER server of yours (e.g. your Render backend) when this host's IP is refused by Microsoft.
+  async synthesizeRemote(options) {
+    const url = process.env.TTS_REMOTE_URL;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(process.env.TTS_REMOTE_SECRET ? { "x-tts-secret": process.env.TTS_REMOTE_SECRET } : {}) },
+      body: JSON.stringify({ text: options.text, voice: options.voice, rate: Number.parseInt(options.rate, 10) || 0, pitch: Number.parseInt(options.pitch, 10) || 0, volume: Number.parseInt(options.volume, 10) || 0 }),
+      signal: AbortSignal.timeout(options.timeout + 5000),
+    });
+    if (!res.ok) throw new Error(`remote HTTP ${res.status}`);
+    return Buffer.from(await res.arrayBuffer());
+  },
+
   // Tries every provider in order; returns { audio, provider, errors }.
   async synthesize(options) {
     const errors = [];
+    if (process.env.TTS_REMOTE_URL) {
+      try { return { audio: await deps.synthesizeRemote(options), provider: "remote-edge", errors }; }
+      catch (e) { errors.push(`remote: ${e.message}`); }
+    }
+    if (process.env.AZURE_SPEECH_KEY && process.env.AZURE_SPEECH_REGION) {
+      try { return { audio: await deps.synthesizeAzure(options), provider: "azure", errors }; }
+      catch (e) { errors.push(`azure: ${e.message}`); }
+    }
     for (const chrome of CHROME_VERSIONS) {
       try { return { audio: await deps.synthesizeEdge({ ...options, chrome }), provider: "edge", errors }; }
-      catch (e) { errors.push(`edge(${chrome.split(".")[0]}): ${e.message}`); }
+      catch (e) { errors.push(`edge(${chrome.replace(/\..*:/, ":").split(".")[0]}${chrome.endsWith(":min") ? " min" : ""}): ${e.message}`); }
     }
     // Google has only ONE (non Piseth/Sreymom) voice, so it is used only when explicitly allowed.
     if (process.env.TTS_ALLOW_FALLBACK === "true") {
@@ -159,6 +200,11 @@ export async function diagnose() {
     const s = t0();
     try { const a = await deps.synthesizeEdge({ ...base, chrome }); out.push({ provider: `edge ${chrome}`, ok: a.length > 0, bytes: a.length, ms: Date.now() - s }); }
     catch (e) { out.push({ provider: `edge ${chrome}`, ok: false, error: String(e.message).slice(0, 200), ms: Date.now() - s }); }
+  }
+  if (process.env.AZURE_SPEECH_KEY) {
+    const sa = t0();
+    try { const a = await deps.synthesizeAzure(base); out.push({ provider: "azure", ok: a.length > 0, bytes: a.length, ms: Date.now() - sa }); }
+    catch (e) { out.push({ provider: "azure", ok: false, error: String(e.message).slice(0, 200), ms: Date.now() - sa }); }
   }
   const s = t0();
   try { const a = await deps.synthesizeGoogle(base); out.push({ provider: "google", ok: a.length > 0, bytes: a.length, ms: Date.now() - s }); }
