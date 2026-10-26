@@ -24,6 +24,8 @@ try {
     cloud: await import("../services/cloudShareService.js"),
     qr: await import("../services/qrImageService.js"),
     editor: await import("../services/editorProjects.js"),
+    pay: await import("../controllers/paymentController.js"),
+    khqr: await import("../lib/khqr.js"),
   };
 } catch (e) {
   console.log("skip app-sqlite:", e.message);
@@ -134,4 +136,48 @@ run("CloudShare + QR images + editor projects on the cloud SQLite", async () => 
   await assert.rejects(m.editor.getProject("u2", p.id), (e) => e.code === "PROJECT_NOT_FOUND");
   await m.editor.deleteProject("u1", p.id);
   assert.equal((await m.editor.listProjects("u1")).length, 0);
+});
+
+run("KHQR.dev payment: create → poll → webhook (signed, replay-safe, idempotent)", async () => {
+  const { createHmac } = await import("node:crypto");
+  process.env.RBK_TOKEN = "test-token";
+  process.env.KHQR_WEBHOOK_SECRET = "whsec";
+  const md5 = "d".repeat(32);
+  let status = "unpaid", sentAuth = "";
+  m.khqr.deps.fetch = async (url, o) => {
+    sentAuth = o.headers.Authorization;
+    const json = url.endsWith("/generate_qr")
+      ? { responseCode: 0, data: { qr: "00020101021229370016A000000677010111", md5, tran_id: "1786" } }
+      : { data: { status } };
+    return { ok: true, status: 200, json: async () => json, headers: { get: () => null } };
+  };
+  const u = await m.User.create({ name: "Pay", email: "pay@x.co", password: "password123" });
+  const before = u.tokens;
+  const c = await call(m.pay.createPayment, { user: u, body: { planId: "2" } });
+  assert.equal(c.code, 201, JSON.stringify(c.body));
+  assert.equal(sentAuth, "Bearer test-token");
+  assert.match(c.body.data.image, /^data:image\/png/);
+  assert.equal(c.body.data.md5, md5);
+
+  const poll = (st) => { status = st; return call(m.pay.paymentStatus, { user: u, params: { md5 } }); };
+  assert.equal((await poll("scanned")).body.data.status, "scanned");
+
+  const send = (body, { secret = "whsec", ts = Date.now() } = {}) => {
+    const raw = Buffer.from(JSON.stringify(body));
+    const sig = createHmac("sha256", secret).update(raw).digest("hex");
+    const h = { "x-rbk-signature": sig, "x-rbk-delivery": String(ts) };
+    return call(m.pay.khqrWebhook, { rawBody: raw, body, get: (k) => h[k.toLowerCase()] });
+  };
+  const ev = { event: "payment.success", data: { md5 } };
+  assert.equal((await send(ev, { secret: "wrong" })).code, 401);
+  assert.equal((await send(ev, { ts: Date.now() - 10 * 60 * 1000 })).code, 400);
+  status = "unpaid"; // forged payload: API says unpaid → nothing credited
+  await send(ev);
+  assert.equal((await m.User.findById(u._id)).tokens, before);
+  status = "paid";
+  assert.equal((await send(ev)).code, 200);
+  await send(ev); await poll("paid"); // replay + poll → still credited once
+  const after = (await m.User.findById(u._id)).tokens;
+  assert.ok(after > before);
+  assert.equal(after - before, c.body.data.plan.tokens);
 });

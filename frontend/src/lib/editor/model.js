@@ -14,6 +14,25 @@ export const LANES = [
   { id: "voice", kind: "audio", types: ["audio"] },
 ];
 export const MIN_DUR = 0.1;
+
+// Clips that overlap in time on the same lane never sit on top of each other: each lane is split into
+// tracks (rows). Greedy first-fit by start time → { track: Map(clipId → row), rows: { [laneId]: rowCount } }.
+export function assignTracks(clips) {
+  const track = new Map();
+  const rows = {};
+  for (const lane of LANES) {
+    const ends = [];
+    const list = clips.filter((c) => c.lane === lane.id).sort((a, b) => a.start - b.start || a.id.localeCompare(b.id));
+    for (const c of list) {
+      let r = ends.findIndex((e) => e <= c.start + 1e-6);
+      if (r < 0) { r = ends.length; ends.push(0); }
+      ends[r] = c.start + c.dur;
+      track.set(c.id, r);
+    }
+    rows[lane.id] = Math.max(1, ends.length);
+  }
+  return { track, rows };
+}
 export const IMAGE_DEFAULT_DUR = 5;
 export const TEXT_DEFAULT_DUR = 4;
 

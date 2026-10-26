@@ -55,7 +55,8 @@ export function createApp() {
     })
   );
 
-  app.use(express.json({ limit: "4mb" }));
+  // rawBody is kept for the KHQR.dev webhook: its HMAC signature is computed over the exact bytes.
+  app.use(express.json({ limit: "4mb", verify: (req, _res, buf) => { if (req.originalUrl?.startsWith("/api/payments/webhook")) req.rawBody = buf; } }));
   app.use(express.urlencoded({ extended: true, limit: "1mb" }));
   app.use(cookieParser());
   configurePassport();

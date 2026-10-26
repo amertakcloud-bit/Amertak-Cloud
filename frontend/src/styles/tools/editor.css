@@ -96,7 +96,15 @@
 .ve-ruler { position: absolute; top: 0; left: 0; right: 0; height: 26px; border-bottom: 1px solid var(--border); cursor: col-resize; background: var(--bg); }
 .ve-tick { position: absolute; top: 5px; font-size: .7rem; color: var(--text-muted); padding-left: 4px; border-left: 1px solid var(--border); height: 18px; user-select: none; }
 .ve-lane { position: absolute; left: 0; right: 0; border-bottom: 1px dashed var(--border); }
-.ve-lane-label { position: sticky; left: 0; z-index: 3; width: 74px; height: 100%; display: flex; align-items: center; padding: 0 8px; font-size: .72rem; color: var(--text-muted); background: var(--surface); border-right: 1px solid var(--border); }
+.ve-lane-label { position: sticky; left: 0; z-index: 3; width: 84px; height: 100%; display: flex; align-items: center; gap: 2px; padding: 0 6px 0 2px; font: inherit; font-size: .72rem; color: var(--text-muted); background: var(--surface); border: 0; border-right: 1px solid var(--border); cursor: pointer; text-align: left; }
+.ve-lane-label:hover { color: var(--text); background: var(--primary-soft); }
+.ve-lane-label i { font-size: 1.05rem; flex: none; }
+.ve-lane-label span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ve-lane-label em { font-style: normal; font-size: .62rem; background: var(--primary-soft); color: var(--primary); border-radius: 99px; padding: 0 6px; }
+.ve-lane.is-collapsed { opacity: .85; }
+.ve-wave { position: absolute; inset: 0; margin: auto 0; pointer-events: none; }
+.ve-clip.has-wave { background: #047857; }
+.ve-clip.has-wave .ve-clip-label { position: absolute; left: 0; top: 0; font-size: .64rem; text-shadow: 0 1px 2px rgba(0,0,0,.7); max-width: 100%; }
 .ve-clip { position: absolute; top: 4px; bottom: 4px; display: flex; align-items: center; border-radius: 8px; color: #fff; font-size: .72rem; overflow: hidden; cursor: grab; user-select: none; border: 2px solid transparent; background: #6366f1; touch-action: none; }
 .ve-clip.ve-video { background: #8b5cf6; } .ve-clip.ve-image { background: #0ea5e9; } .ve-clip.ve-audio { background: #10b981; }
 .ve-clip.ve-text { background: #f59e0b; } .ve-clip.ve-caption { background: #dc2464; }
@@ -130,3 +138,10 @@
   .ve-save { display: none; }
   .ve-bottom .ve-timeline { max-height: 150px; }
 }
+
+.ve-splitbtn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 99px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font: inherit; font-size: .82rem; font-weight: 600; cursor: pointer; }
+.ve-splitbtn:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); background: var(--primary-soft); }
+.ve-splitbtn:disabled { opacity: .45; cursor: not-allowed; }
+.ve-scrub { width: calc(100% - 24px); margin: 0 12px 8px; accent-color: var(--primary); flex: none; }
+.ve-transport { flex-wrap: wrap; }
+@media (max-width: 900px) { .ve-splitbtn span { display: none; } .ve-time { min-width: 0; } }

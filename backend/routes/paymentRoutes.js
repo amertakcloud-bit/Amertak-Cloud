@@ -1,6 +1,6 @@
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
-import { createPayment, claimPayment } from "../controllers/paymentController.js";
+import { createPayment, claimPayment, paymentStatus, khqrWebhook } from "../controllers/paymentController.js";
 import { protect } from "../middleware/authMiddleware.js";
 
 const router = Router();
@@ -17,6 +17,9 @@ const paymentLimiter = rateLimit({
   },
 });
 
+// Public, signed by KHQR.dev (see khqrWebhook) — no login, no rate limiter that could drop real events.
+router.post("/webhook", khqrWebhook);
+router.get("/:md5/status", protect, paymentStatus);
 router.post("/", paymentLimiter, protect, createPayment);
 router.post("/claim", paymentLimiter, protect, claimPayment);
 

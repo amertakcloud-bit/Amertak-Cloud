@@ -5,8 +5,6 @@ import { NavLink } from "react-router-dom";
 import { motion } from "motion/react";
 import http from "../services/api";
 
-const API_BASE = "https://bakongkhqr-73jw.onrender.com";
-
 // status -> translation key
 const STATUS_KEY = {
   unpaid: "payUnpaid",
@@ -14,27 +12,6 @@ const STATUS_KEY = {
   paid: "payPaid",
   expired: "payExpired",
 };
-
-// API error code -> translation key
-const ERR_KEY = {
-  invalid_request: "errInvalidRequest",
-  too_many_requests: "errTooManyRequests",
-  payment_provider_timeout: "errPaymentProviderTimeout",
-  payment_provider_maintenance: "errPaymentProviderMaintenance",
-};
-
-// Thin fetch wrapper: throws an Error carrying .status and .retryAfter on failure.
-async function api(path, opts) {
-  const res = await fetch(API_BASE + path, opts);
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const e = new Error(body.error || "request_failed");
-    e.status = res.status;
-    e.retryAfter = Number(res.headers.get("Retry-After")) || 0;
-    throw e;
-  }
-  return body;
-}
 
 const fmtTime = (s) =>
   `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
@@ -152,17 +129,40 @@ function Payment({
     const c = current.current;
     if (!c || !mounted.current) return;
     try {
-      const s = await api(`/api/payments/${c.md5}/status`);
+      // Our server asks KHQR.dev (token stays on the server) and credits the tokens once it is paid.
+      const res = await http.get(`/payments/${c.md5}/status`);
+      const s = res?.data || {};
       if (!mounted.current) return;
-      setRemaining(s.remainingSeconds);
+      if (Number.isFinite(s.remainingSeconds)) setRemaining(s.remainingSeconds);
       setStatus(s.status);
-      if (s.status === "paid") return finish(true);
+      if (s.status === "paid") {
+        if (s.tokens != null) { setClaimData({ tokens: s.tokens, added: s.added || 0, planName: s.planName }); claimRan.current = true; refreshUser(); onPaid?.(s); }
+        return finish(true);
+      }
       if (s.status === "expired") return finish(false);
       schedulePoll(c.pollIntervalMs || 4000);
     } catch (e) {
       if (!mounted.current) return;
       if (e.status === 404) return finish(false);
-      schedulePoll(Math.max(e.retryAfter * 1000, 6000));
+      schedulePoll(e.status === 429 ? 8000 : 6000);
+    }
+  }
+
+  // Official KHQR.dev popup (checkout.min.js); falls back to opening the hosted page.
+  async function openCheckout() {
+    const c = current.current;
+    if (!c) return;
+    try {
+      if (!window.KHQR) {
+        await new Promise((ok, no) => {
+          const el = document.createElement("script");
+          el.src = "https://checkout.khqr.dev/static/js/checkout.min.js";
+          el.onload = ok; el.onerror = no; document.head.appendChild(el);
+        });
+      }
+      window.KHQR.pay(c.md5);
+    } catch {
+      if (c.checkoutUrl) window.open(c.checkoutUrl, "_blank", "noopener");
     }
   }
 
@@ -220,10 +220,7 @@ function Payment({
       const okImg =
         typeof data.image === "string" && data.image.startsWith("data:image/");
       setImage(okImg ? data.image : "");
-      const okLink =
-        typeof data.deeplink === "string" &&
-        data.deeplink.startsWith("https://");
-      setDeeplink(okLink ? data.deeplink : "");
+      setDeeplink(typeof data.checkoutUrl === "string" && data.checkoutUrl.startsWith("https://") ? data.checkoutUrl : "");
       setRemaining(DEFAULT_SECONDS);
       setStatus("unpaid");
       setReady(true);
@@ -235,12 +232,7 @@ function Payment({
     } catch (e) {
       if (!mounted.current) return;
       // Provider error codes are snake_case; our API sends readable sentences.
-      const isCode = /^[a-z_]+$/.test(e.message || "");
-      setError(
-        isCode
-          ? t(ERR_KEY[e.message] || "payErrorGeneric")
-          : e.message || t("payErrorGeneric"),
-      );
+      setError(e.message || t("payErrorGeneric"));
       created.current = false;
     } finally {
       if (mounted.current) setCreating(false);
@@ -363,15 +355,10 @@ function Payment({
             </div>
 
             {deeplink ? (
-              <a
-                className="btn"
-                href={deeplink}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
+              <button type="button" className="btn" onClick={openCheckout}>
                 <i className="ri-flashlight-fill"></i>
                 <span>{t("payOpenBank")}</span>
-              </a>
+              </button>
             ) : null}
           </>
         ) : creating ? (

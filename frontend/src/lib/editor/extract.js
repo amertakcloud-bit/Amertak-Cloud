@@ -1,4 +1,4 @@
-import { decodeToMono16k, sliceToWav } from "../audio/decode.js";
+import { decodeToMono16k, sliceToWav, primeDecoded } from "../audio/decode.js";
 
 // Pulls the sound out of a video: mono, 16 kHz, 16-bit WAV (~1.9 MB per minute instead of tens of MB of video).
 // Smaller upload ⇒ faster transcription/translation and fewer tokens (tokens are charged by file size).
@@ -9,5 +9,6 @@ export async function extractAudio(blob, name = "audio") {
   const { samples, rate, duration } = await decodeToMono16k(blob);
   const wav = sliceToWav(samples, 0, samples.length, rate);
   const file = new File([wav], `${String(name).replace(/\.[^.]+$/, "")}.wav`, { type: "audio/wav" });
+  primeDecoded(file, { samples, rate, duration }); // transcription reuses these samples: no second decode
   return { file, duration, size: file.size };
 }

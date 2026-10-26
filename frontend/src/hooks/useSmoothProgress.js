@@ -18,7 +18,9 @@ export default function useSmoothProgress(target, active) {
     }), 40);
     const creep = setInterval(() => setShown((s) => {
       const t = tgt.current;
-      return t < 100 && s >= t && s < Math.min(99, t + 10) ? s + 1 : s;
+      // keeps moving while a long request is in flight; slows down the further it runs ahead of the real value
+      const ahead = s - t;
+      return t < 100 && s >= t && s < 97 && (ahead < 6 || Math.random() < 6 / (ahead + 1)) ? s + 1 : s;
     }), 700);
     return () => { clearInterval(follow); clearInterval(creep); };
   }, [active]);

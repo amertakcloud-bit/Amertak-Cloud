@@ -37,6 +37,8 @@ const paymentSchema = new mongoose.Schema(
     paidAt: { type: Date, default: null },
     claimedAt: { type: Date, default: null }, // set exactly once when credited
     expiresAt: { type: Date, default: null },
+    tranId: { type: String, default: null },
+    checkoutUrl: { type: String, default: null },
   },
   { timestamps: true }
 );

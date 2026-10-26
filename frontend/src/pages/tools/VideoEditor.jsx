@@ -12,6 +12,7 @@ import useToolsStatus from "../../hooks/useToolsStatus";
 import Timeline from "../../components/editor/Timeline";
 import Inspector from "../../components/editor/Inspector";
 import StageOverlay from "../../components/editor/StageOverlay";
+import CaptionStyle from "../../components/editor/CaptionStyle";
 import AiPanel from "../../components/editor/AiPanel";
 import { friendlyError } from "../../lib/errors";
 import { formatBytes, saveBlob as download } from "../../lib/download";
@@ -655,6 +656,7 @@ function Workspace({ id }) {
   const duration = projectDuration(project);
   const fmtT = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}.${String(Math.floor((s % 1) * 10))}`;
   const mediaList = useMemo(() => Object.values(project.media), [project.media]);
+  const getBlob = useCallback((mid) => getMedia(id, mid).catch(() => null), [id]);
 
   if (loadError) {
     return (
@@ -718,6 +720,14 @@ function Workspace({ id }) {
                   </div>
                 ))}
                 {missing.length > 0 && <p className="tk-hint">{t("veMissingHint")}</p>}
+                {mediaList.length > 0 && (
+                  <section className="ve-sec">
+                    <h4><i className="ri-tools-line" /> {t("veMediaTools")}</h4>
+                    <button type="button" className="tk-btn ghost full" disabled={busy || !source} onClick={extractAudioTool}><i className="ri-voiceprint-line" />{t("veExtractAudio")} <small>({t("free")})</small></button>
+                    <p className="tk-hint">{t("veExtractHint")}</p>
+                    <button type="button" className="tk-btn ghost full" disabled={busy || !source} onClick={removeSilence}><i className="ri-scissors-cut-line" />{t("veRemoveSilence")} <small>({t("free")})</small></button>
+                  </section>
+                )}
               </div>
             )}
 
@@ -735,13 +745,15 @@ function Workspace({ id }) {
                 <hr className="ve-hr" />
                 {fileInput({ accept: ".srt,text/plain,application/x-subrip", onChange: (e) => { importSrt(e.target.files?.[0]); e.target.value = ""; } }, "tk-btn ghost full ve-file", <><i className="ri-file-text-line" />{t("veAddSrt")}</>)}
                 <button type="button" className="tk-btn ghost full" onClick={exportSrt}><i className="ri-download-line" />{t("veExportSrt")}</button>
+                <hr className="ve-hr" />
+                <CaptionStyle t={t} busy={busy} highlight={{ on: Boolean(project.captionStyle?.karaoke), color: project.captionStyle?.hl || DEFAULT_HIGHLIGHT }} onHighlight={applyHighlight} onCaptionPreset={applyPreset} />
               </div>
             )}
 
             {activeTab === "ai" && (
               <AiPanel t={t} user={user} status={status} access={access} busy={busy} aiBusy={aiBusy} history={aiHistory} onPrompt={runAi}
                 cost={cost} aiCost={AI_EDIT_COST} balance={Number(user?.tokens ?? 0)} source={source} sourceClips={sourceClips} setAiSource={setAiSource}
-                onGenerateCaptions={() => generateCaptions()} onGenerateKhmerCaptions={() => generateCaptions({ translate: true })} onExtractAudio={extractAudioTool} highlight={{ on: Boolean(project.captionStyle?.karaoke), color: project.captionStyle?.hl || DEFAULT_HIGHLIGHT }} onHighlight={applyHighlight} onTranslate={translateToVoice} onRemoveSilence={removeSilence} onCaptionPreset={applyPreset}
+                onGenerateCaptions={() => generateCaptions()} onGenerateKhmerCaptions={() => generateCaptions({ translate: true })} onTranslate={translateToVoice}
                 lang={lang} setLang={setLang} voice={voice} setVoice={setVoice} orig={orig} setOrig={setOrig} project={project} />
             )}
 
@@ -761,12 +773,17 @@ function Workspace({ id }) {
             </div>
           </div>
           <div className="ve-transport">
-            <button type="button" className="ve-ibtn" onClick={() => engine.current?.seek(0)} aria-label={t("veToStart")}><i className="ri-skip-back-fill" /></button>
+            <button type="button" className="ve-ibtn" onClick={() => engine.current?.seek(0)} aria-label={t("veToStart")} title={t("veToStart")}><i className="ri-skip-back-fill" /></button>
+            <button type="button" className="ve-ibtn" onClick={() => engine.current?.seek(Math.max(0, timeRef.current - 5))} aria-label={t("veSkipBack")} title={t("veSkipBack")}><i className="ri-replay-5-line" /></button>
             <button type="button" className="ve-play" onClick={() => engine.current?.toggle()} disabled={busy || !duration} aria-label={playing ? t("vePause") : t("vePlay")}>
               <i className={playing ? "ri-pause-fill" : "ri-play-fill"} />
             </button>
+            <button type="button" className="ve-ibtn" onClick={() => engine.current?.seek(Math.min(duration, timeRef.current + 5))} aria-label={t("veSkipFwd")} title={t("veSkipFwd")}><i className="ri-forward-5-line" /></button>
             <span className="ve-time">{fmtT(time)} / {fmtT(duration)}</span>
+            <button type="button" className="ve-splitbtn" onClick={split} disabled={busy || !duration} title={`${t("veSplit")} (S)`}><i className="ri-scissors-cut-line" /><span>{t("veSplitHere")}</span></button>
           </div>
+          <input type="range" className="ve-scrub" min="0" max={Math.max(0.1, duration)} step="0.05" value={Math.min(time, Math.max(0.1, duration))}
+            onChange={(e) => engine.current?.seek(Number(e.target.value))} disabled={!duration} aria-label={t("veScrub")} />
         </section>
 
         {!narrow && <aside className="ve-right"><div className="ve-right-h">{t("veTab_inspector")}</div>{inspector}</aside>}
@@ -787,7 +804,7 @@ function Workspace({ id }) {
           <i className="ri-zoom-in-line" aria-hidden="true" />
         </div>
         <Timeline project={project} time={time} zoom={zoom} selected={selected} t={t}
-          onSelect={setSelected} onSeek={(s) => engine.current?.seek(s)} onPreview={onPreview} onCommit={onCommit} />
+          onSelect={setSelected} onSeek={(s) => engine.current?.seek(s)} onPreview={onPreview} onCommit={onCommit} getBlob={getBlob} />
       </div>
 
       {task && (

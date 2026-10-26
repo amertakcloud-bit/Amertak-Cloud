@@ -1,13 +1,11 @@
 import { useRef, useState } from "react";
 import Select from "../ui/Select";
 import GeminiKeyPanel from "../tools/GeminiKey";
-import { CAPTION_PRESETS } from "../../lib/editor/model";
-import { SWATCHES } from "./Inspector";
 
 const SUGGESTIONS = ["veAiEx1", "veAiEx2", "veAiEx3", "veAiEx4"];
 
 // "AI editor": describe an edit in plain words → the AI returns safe edit operations → applied to the timeline.
-// Also holds the one-click AI tools (captions, translate-to-Khmer voice, remove silence, caption looks).
+// Only AI lives here: the chat, AI captions and translate-to-Khmer voice. Media tools are in "Media", caption looks in "Text".
 export default function AiPanel({
   t, user, status, access, busy, aiBusy, history, onPrompt, cost, source, sourceClips, setAiSource, aiCost,
   onGenerateCaptions, onGenerateKhmerCaptions, onExtractAudio, highlight, onHighlight, onTranslate, onRemoveSilence, onCaptionPreset, lang, setLang, voice, setVoice, orig, setOrig, project, balance,
@@ -59,32 +57,6 @@ export default function AiPanel({
         <button type="button" className="tk-btn full" disabled={busy || !source} onClick={onGenerateCaptions}><i className="ri-closed-captioning-line" />{t("veGenCaptions")}</button>
         <button type="button" className="tk-btn full" disabled={busy || !source} onClick={onGenerateKhmerCaptions}><i className="ri-translate-2" />{t("veGenCaptionsKm")}</button>
         <p className="tk-hint">{t("veGenCaptionsKmHint")}</p>
-        <button type="button" className="tk-btn ghost full" disabled={busy || !source} onClick={onExtractAudio}><i className="ri-voiceprint-line" />{t("veExtractAudio")} <small>({t("free")})</small></button>
-        <p className="tk-hint">{t("veExtractHint")}</p>
-        <button type="button" className="tk-btn ghost full" disabled={busy || !source} onClick={onRemoveSilence}><i className="ri-scissors-cut-line" />{t("veRemoveSilence")} <small>({t("free")})</small></button>
-      </section>
-
-      <section className="ve-sec">
-        <h4>{t("veHighlightTitle")}</h4>
-        <label className="ve-checks"><input type="checkbox" checked={highlight.on} onChange={(e) => onHighlight(e.target.checked, highlight.color)} /> {t("veHighlight")}</label>
-        <div className="ve-colors" role="group" aria-label={t("veHighlightColor")}>
-          {SWATCHES.map((c) => (
-            <button key={c} type="button" className={"ve-sw" + (highlight.color.toLowerCase() === c ? " on" : "")} style={{ background: c }} aria-label={c} onClick={() => onHighlight(true, c)} />
-          ))}
-          <input type="color" className="ve-color" value={/^#[0-9a-f]{6}$/i.test(highlight.color) ? highlight.color : "#facc15"} onChange={(e) => onHighlight(true, e.target.value)} aria-label={t("veHighlightColor")} />
-        </div>
-      </section>
-
-      <section className="ve-sec">
-        <h4>{t("veCaptionLooks")}</h4>
-        <div className="ve-looks">
-          {CAPTION_PRESETS.map((p) => (
-            <button key={p.id} type="button" className="ve-look" onClick={() => onCaptionPreset(p)} disabled={busy}>
-              <span style={{ color: p.style.color, background: p.style.bg, fontWeight: p.style.bold ? 700 : 400, textShadow: p.style.outline ? "0 0 2px #000, 0 0 2px #000" : "none" }}>Aa</span>
-              <em>{t(p.key)}</em>
-            </button>
-          ))}
-        </div>
       </section>
 
       <section className="ve-sec">

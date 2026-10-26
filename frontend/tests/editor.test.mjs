@@ -173,3 +173,26 @@ test("audio extraction size estimate (16 kHz mono 16-bit)", async () => {
   assert.equal(estimateWavBytes(60), 60 * 32000 + 44);
   assert.equal(estimateWavBytes(-5), 44);
 });
+
+test("assignTracks: overlapping clips get their own row, sequential clips share one", async () => {
+  const { assignTracks } = await import("../src/lib/editor/model.js");
+  const clips = [
+    { id: "a", lane: "audio", start: 0, dur: 10 },
+    { id: "b", lane: "audio", start: 5, dur: 10 },
+    { id: "c", lane: "audio", start: 10, dur: 2 },
+    { id: "v", lane: "video", start: 0, dur: 4 },
+    { id: "w", lane: "video", start: 4, dur: 4 },
+  ];
+  const { track, rows } = assignTracks(clips);
+  assert.equal(track.get("a"), 0); assert.equal(track.get("b"), 1); assert.equal(track.get("c"), 0);
+  assert.equal(rows.audio, 2); assert.equal(rows.video, 1); assert.equal(rows.voice, 1);
+});
+
+test("peaksFromSamples normalises to 0..1 at 50 buckets/s", async () => {
+  const { peaksFromSamples } = await import("../src/lib/editor/waveform.js");
+  const rate = 16000, s = new Float32Array(rate * 2);
+  for (let i = 0; i < rate; i++) s[i] = 0.5 * Math.sin(i / 10);
+  const p = peaksFromSamples(s, rate);
+  assert.equal(p.length, 100);
+  assert.ok(Math.max(...p) <= 1 && p[10] > 0.9 && p[80] === 0);
+});

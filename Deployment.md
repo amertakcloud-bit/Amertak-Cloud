@@ -90,7 +90,8 @@ git push -u origin main
 | `GEMINI_API_KEY` | key របស់អ្នក (ស្រេចចិត្ត) | **មានតែអ្នកប្រើដែលចូលគណនីប៉ុណ្ណោះដែលប្រើវាបាន** |
 | `GEMINI_TRANSCRIBE_MODEL` | `gemini-3.5-transcribe` | ស្រេចចិត្ត |
 | `GEMINI_MODEL` | `gemini-3.8-flash` | ស្រេចចិត្ត |
-| `PAYMENT_PROVIDER_URL` | `https://bakongkhqr-73jw.onrender.com` | |
+| `RBK_TOKEN` | KHQR.dev store token | server only |
+| `KHQR_WEBHOOK_SECRET` | webhook secret | URL: `/api/payments/webhook` |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | ពី Google Cloud | ប្រសិនបើប្រើ Google login |
 | `GOOGLE_CALLBACK_URL` | `https://<backend>.vercel.app/api/auth/google/callback` | |
 | `TELEGRAM_BOT_ID` / `TELEGRAM_BOT_TOKEN` / `TELEGRAM_BOT_USERNAME` | token **ថ្មី** | ប្រសិនបើប្រើ Telegram login |

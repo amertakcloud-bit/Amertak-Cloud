@@ -1,8 +1,4 @@
 import { spawn } from "node:child_process";
-import { randomUUID } from "node:crypto";
-import { readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { AppError } from "../../lib/AppError.js";
 
 // Server-side media → audio conversion using a bundled ffmpeg (ffmpeg-static).
@@ -43,38 +39,38 @@ export async function convertToAudio(input, { format = "mp3", bitrate = 192, sta
   const ff = await deps.ffmpegPath();
   if (!ff) throw new AppError(503, "FFMPEG_MISSING", "Audio conversion is not available on this server.");
 
-  const id = randomUUID();
-  const inFile = join(tmpdir(), `in-${id}`);
-  const outFile = join(tmpdir(), `out-${id}.${format}`);
-  await writeFile(inFile, input);
+  // Everything streams through pipes (stdin → stdout): nothing is written to disk, so no temp files on Vercel.
   const args = ["-hide_banner", "-loglevel", "error", "-y"];
   if (Number(startSec) > 0) args.push("-ss", String(Number(startSec)));
-  args.push("-i", inFile);
+  args.push("-i", "pipe:0");
   if (Number(endSec) > 0) args.push("-to", String(Number(endSec)));
   args.push("-vn", ...f.args);
   if (f.bitrate) args.push("-b:a", `${br}k`);
   // Vorbis rejects some bitrate/sample-rate pairs → use quality scale (VBR) instead.
   if (f.quality) args.push("-q:a", String({ 64: 2, 96: 3, 128: 4, 192: 6, 256: 7, 320: 8 }[br]));
-  args.push(outFile);
+  // A pipe cannot be seeked back: MP4/M4A are written as fragmented MP4, WAV is streamed.
+  const outFmt = { mp3: "mp3", m4a: "ipod", ogg: "ogg", wav: "wav" }[format];
+  if (format === "m4a") args.push("-movflags", "frag_keyframe+empty_moov");
+  args.push("-f", outFmt, "pipe:1");
 
-  try {
-    await new Promise((resolve, reject) => {
-      const p = spawn(ff, args, { stdio: ["ignore", "ignore", "pipe"] });
-      let err = "";
-      p.stderr.on("data", (d) => { err = (err + d).slice(-2000); });
-      const timer = setTimeout(() => { p.kill("SIGKILL"); reject(new AppError(504, "CONVERT_TIMEOUT", "Conversion took too long. Try a shorter file.")); }, timeoutMs);
-      p.on("error", () => { clearTimeout(timer); reject(new AppError(503, "FFMPEG_MISSING", "Audio conversion is not available on this server.")); });
-      p.on("close", (code) => {
-        clearTimeout(timer);
-        if (code === 0) resolve();
-        else reject(new AppError(422, "CONVERT_FAILED", /no audio|does not contain any stream|Output file does not contain/i.test(err) ? "That file has no audio track." : "Could not convert that file. It may be corrupted."));
-      });
+  const audio = await new Promise((resolve, reject) => {
+    const p = spawn(ff, args, { stdio: ["pipe", "pipe", "pipe"] });
+    const out = [];
+    let err = "";
+    p.stdout.on("data", (d) => out.push(d));
+    p.stderr.on("data", (d) => { err = (err + d).slice(-2000); });
+    p.stdin.on("error", () => {}); // ffmpeg may close early (e.g. -to reached)
+    const timer = setTimeout(() => { p.kill("SIGKILL"); reject(new AppError(504, "CONVERT_TIMEOUT", "Conversion took too long. Try a shorter file.")); }, timeoutMs);
+    p.on("error", () => { clearTimeout(timer); reject(new AppError(503, "FFMPEG_MISSING", "Audio conversion is not available on this server.")); });
+    p.on("close", (code) => {
+      clearTimeout(timer);
+      if (code === 0) resolve(Buffer.concat(out));
+      else reject(new AppError(422, "CONVERT_FAILED", /no audio|does not contain any stream|Output file does not contain/i.test(err)
+        ? "That file has no audio track."
+        : /moov atom not found|Invalid data found/i.test(err) ? "This video cannot be read as a stream. Use “Extract audio” in the Video Editor (done in your browser) first." : "Could not convert that file. It may be corrupted."));
     });
-    const audio = await readFile(outFile);
-    if (!audio.length) throw new AppError(422, "CONVERT_FAILED", "The conversion produced no audio.");
-    return { audio, type: f.type, ext: format };
-  } finally {
-    rm(inFile, { force: true }).catch(() => {});
-    rm(outFile, { force: true }).catch(() => {});
-  }
+    p.stdin.end(input);
+  });
+  if (!audio.length) throw new AppError(422, "CONVERT_FAILED", "The conversion produced no audio.");
+  return { audio, type: f.type, ext: format };
 }

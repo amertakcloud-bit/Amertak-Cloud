@@ -8,7 +8,19 @@ export class DecodeError extends Error {
 }
 
 // Decodes any audio/video file the browser understands into mono Float32 at 16 kHz.
+const decodedCache = new WeakMap();
+// Remember samples already decoded for a File so the same audio is never decoded twice.
+export const primeDecoded = (file, result) => { try { decodedCache.set(file, result); } catch { /* not cacheable */ } };
+
 export async function decodeToMono16k(file, { maxMinutes = MAX_MINUTES } = {}) {
+  const hit = decodedCache.get(file);
+  if (hit) return hit;
+  const out = await decodeFresh(file, maxMinutes);
+  primeDecoded(file, out);
+  return out;
+}
+
+async function decodeFresh(file, maxMinutes) {
   const Ctx = window.AudioContext || window.webkitAudioContext;
   if (!Ctx) throw new DecodeError("NO_AUDIO_API", "This browser cannot decode audio.");
   const arr = await file.arrayBuffer();
