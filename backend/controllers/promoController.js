@@ -1,4 +1,5 @@
 import User from "../models/User.js";
+import { afterGrant } from "../lib/ledger.js";
 import PromoCode from "../models/Promocode.js";
 import { asyncHandler } from "../middleware/errorMiddleware.js";
 
@@ -79,6 +80,7 @@ export const redeemPromoCode = asyncHandler(async (req, res) => {
   promo.usedCount += 1;
   promo.usedBy = [...usedBy, user._id];
   await promo.save();
+  await afterGrant(user._id, granted, "promo", { balance: updatedUser.tokens, ref: promo.code, title: `Promo ${promo.code}: +${granted} tokens` });
 
   return res.status(200).json({
     success: true,

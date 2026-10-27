@@ -1,0 +1,17 @@
+.nb { position: relative; }
+.nb-btn { position: relative; }
+.nb-badge { position: absolute; top: -4px; right: -4px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: #ef4444; color: #fff; font-size: 11px; line-height: 17px; font-weight: 700; text-align: center; }
+.nb-pop { position: absolute; right: 0; top: calc(100% + 8px); width: min(360px, calc(100vw - 24px)); background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 18px 40px var(--shadow); z-index: 60; overflow: hidden; }
+.nb-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.nb-link { background: none; border: 0; color: var(--primary); cursor: pointer; font-size: 13px; }
+.nb-link:disabled { opacity: .4; cursor: default; }
+.nb-list { list-style: none; margin: 0; padding: 0; max-height: 380px; overflow: auto; }
+.nb-item { display: flex; gap: 10px; align-items: flex-start; padding: 10px 14px; cursor: pointer; border-bottom: 1px solid var(--border); }
+.nb-item > i { font-size: 20px; margin-top: 2px; color: var(--primary); }
+.nb-item.low_balance > i, .nb-item.tokens_removed > i { color: #f59e0b; }
+.nb-item.unread { background: var(--primary-soft); }
+.nb-item p { margin: 2px 0 0; font-size: 13px; color: var(--text-muted); }
+.nb-item:hover { background: var(--surface-hover); }
+.nb-item small { display: block; opacity: .55; font-size: 11px; margin-top: 2px; }
+.nb-item b { font-weight: 600; }
+.nb-empty { padding: 28px 14px; text-align: center; opacity: .6; }

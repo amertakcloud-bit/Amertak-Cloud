@@ -1,10 +1,12 @@
 import crypto from "node:crypto";
 import { AppError } from "./AppError.js";
+import { afterCharge, afterRefund } from "./ledger.js";
 
 // Token prices (whole tokens only — always rounded UP, never decimals).
 export const RATES = Object.freeze({
   captionPerMB: 5, // caption / transcript / image-prompt generation: 1 MB = 5 tokens
   cloudSharePerMB: 2, // CloudShare upload: 5 MB = 10 tokens
+  voiceCharsPerToken: 200, // Video Editor voice (Gemini TTS): 1 token per 200 characters
 });
 
 // ceil(bytes × perMB / 1 MiB), at least 1. bytes × perMB is an integer and 1 MiB is a
@@ -14,9 +16,12 @@ export function tokensForBytes(bytes, perMB) {
   return Math.max(1, Math.ceil((b * perMB) / 1048576));
 }
 
+// ceil(chars / 200), at least 1.
+export const tokensForChars = (chars) => Math.max(1, Math.ceil(Math.max(0, Math.floor(Number(chars) || 0)) / RATES.voiceCharsPerToken));
+
 // Models are imported lazily so unit tests that never touch the database don't need mongoose.
 const User = { findOneAndUpdate: async (...a) => (await import("../models/User.js")).default.findOneAndUpdate(...a), findById: async (...a) => (await import("../models/User.js")).default.findById(...a), updateOne: async (...a) => (await import("../models/User.js")).default.updateOne(...a) };
-const TokenJob = { create: async (...a) => (await import("../models/TokenJob.js")).default.create(...a), findOneAndUpdate: async (...a) => (await import("../models/TokenJob.js")).default.findOneAndUpdate(...a) };
+const TokenJob = { create: async (...a) => (await import("../models/TokenJob.js")).default.create(...a), findOneAndUpdate: async (...a) => (await import("../models/TokenJob.js")).default.findOneAndUpdate(...a), findOne: async (...a) => (await import("../models/TokenJob.js")).default.findOne(...a), updateOne: async (...a) => (await import("../models/TokenJob.js")).default.updateOne(...a) };
 
 // Test seam (unit/e2e tests replace these; production uses MongoDB).
 async function recordInDb(userId, tool, tokens) {
@@ -35,6 +40,7 @@ const secret = () => process.env.SESSION_SECRET || "insecure-dev-secret-change-m
 export async function chargeTokens(userId, cost, tool = "other") {
   const balance = await deps.charge(userId, cost);
   await deps.usage(userId, tool, cost);
+  await afterCharge(userId, cost, tool, balance);
   return balance;
 }
 
@@ -59,6 +65,7 @@ async function chargeInDb(userId, cost) {
 export async function refundTokens(userId, cost, tool = "other") {
   await deps.refund(userId, cost);
   await deps.usage(userId, tool, -cost);
+  if (cost > 0) await afterRefund(userId, cost, tool);
 }
 
 async function refundInDb(userId, cost) {
@@ -67,10 +74,10 @@ async function refundInDb(userId, cost) {
 }
 
 // ── Paid jobs that span several requests (captions: the browser sends many audio chunks) ──
-export async function startJob(userId, kind, cost) {
+export async function startJob(userId, kind, cost, { budget = 0 } = {}) {
   const balance = await chargeTokens(userId, cost, kind);
   const jti = crypto.randomBytes(12).toString("hex");
-  await TokenJob.create({ jti, user: userId, kind, cost });
+  await TokenJob.create({ jti, user: userId, kind, cost, budget, used: 0 });
   const jwt = (await import("jsonwebtoken")).default;
   const token = jwt.sign({ jti, uid: String(userId), kind }, secret(), { expiresIn: "4h" });
   return { token, cost, balance };
@@ -85,6 +92,19 @@ export async function verifyJob(token, userId, kind) {
     /* fall through */
   }
   throw new AppError(402, "JOB_REQUIRED", "Start the job first (tokens are charged when you press the button).");
+}
+
+// Metered jobs (voice): every request spends part of the paid budget. Checked before, recorded after success.
+export async function jobHasBudget(token, userId, kind, amount) {
+  const p = await verifyJob(token, userId, kind);
+  const job = await TokenJob.findOne({ jti: p.jti, user: userId, refunded: false });
+  if (!job) throw new AppError(402, "JOB_REQUIRED", "This voice job was refunded or expired. Start it again.");
+  if ((job.used || 0) + amount > (job.budget || 0)) throw new AppError(402, "JOB_BUDGET_EXCEEDED", "This job's paid text budget is used up.");
+  return p;
+}
+export async function jobSpend(token, userId, kind, amount) {
+  const p = await verifyJob(token, userId, kind);
+  await TokenJob.updateOne({ jti: p.jti, user: userId }, { $inc: { used: amount } });
 }
 
 // Refunds a job once. Returns the refunded amount (0 when already refunded / unknown).

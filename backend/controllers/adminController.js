@@ -1,4 +1,7 @@
 import User from "../models/User.js";
+import { afterGrant, audit } from "../lib/ledger.js";
+import AuditLog from "../models/AuditLog.js";
+import Ledger from "../models/Ledger.js";
 import Payment from "../models/Payment.js";
 import PromoCode from "../models/Promocode.js";
 import { asyncHandler } from "../middleware/errorMiddleware.js";
@@ -178,6 +181,10 @@ export const addTokens = asyncHandler(async (req, res) => {
     { new: true, runValidators: true }
   ).select("name email tokens");
 
+  const note = String(req.body?.reason || "").slice(0, 300);
+  await afterGrant(userId, tokens, "admin_grant", { balance: updatedUser.tokens, note, actor: req.user?._id, title: `+${tokens} tokens added by admin`, body: note });
+  await audit(req.user?._id, "tokens.grant", userId, { tokens, reason: note }, req.ip);
+
   return res.status(200).json({
     success: true,
     data: {
@@ -185,6 +192,41 @@ export const addTokens = asyncHandler(async (req, res) => {
       added: tokens,
     },
   });
+});
+
+// POST /api/admin/users/:userId/tokens/deduct  { tokens, reason }  — never takes the balance below 0
+export const deductTokens = asyncHandler(async (req, res) => {
+  const { userId } = req.params;
+  const tokens = Number(req.body?.tokens);
+  const note = String(req.body?.reason || "").trim().slice(0, 300);
+  if (!Number.isInteger(tokens) || tokens <= 0) return res.status(400).json({ success: false, message: "Please provide a positive whole number of tokens." });
+  if (!note) return res.status(400).json({ success: false, message: "A reason is required when removing tokens." });
+  const updated = await User.findOneAndUpdate({ _id: userId, tokens: { $gte: tokens } }, { $inc: { tokens: -tokens } }, { new: true }).select("name email tokens");
+  if (!updated) {
+    const exists = await User.findById(userId).select("tokens");
+    if (!exists) return res.status(404).json({ success: false, message: "User not found." });
+    return res.status(400).json({ success: false, message: `User only has ${exists.tokens} tokens.` });
+  }
+  await afterGrant(userId, -tokens, "admin_deduct", { balance: updated.tokens, note, actor: req.user?._id, title: `${tokens} tokens removed by admin`, body: note });
+  await audit(req.user?._id, "tokens.deduct", userId, { tokens, reason: note }, req.ip);
+  return res.status(200).json({ success: true, data: { user: toPublicUser(updated), removed: tokens } });
+});
+
+// GET /api/admin/audit?page=&limit=
+export const listAudit = asyncHandler(async (req, res) => {
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 30));
+  const [items, total] = await Promise.all([
+    AuditLog.find().sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit),
+    AuditLog.countDocuments(),
+  ]);
+  return res.json({ success: true, data: { items, total, page, pages: Math.max(1, Math.ceil(total / limit)) } });
+});
+
+// GET /api/admin/users/:userId/ledger
+export const userLedger = asyncHandler(async (req, res) => {
+  const items = await Ledger.find({ user: req.params.userId }).sort({ createdAt: -1 }).limit(100);
+  return res.json({ success: true, data: { items } });
 });
 
 // GET /api/admin/promo-codes
@@ -322,6 +364,7 @@ export const activatePromoCode = asyncHandler(async (req, res) => {
 
   promoCode.isActive = true;
   await promoCode.save();
+  await afterGrant(userId, discount, "promo", { balance: updatedUser.tokens, actor: req.user?._id, ref: promoCode.code, title: `Promo ${promoCode.code}: +${discount} tokens` });
 
   return res.status(200).json({
     success: true,

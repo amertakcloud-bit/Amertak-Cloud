@@ -3,7 +3,7 @@ import { protect } from "../middleware/authMiddleware.js";
 import { dbReady } from "../middleware/dbReady.js";
 import { requireGeminiKey } from "../middleware/geminiKey.js";
 import { aiLimiter, lightLimiter } from "../middleware/rateLimiters.js";
-import { aiEdit, create, list, read, remove, translate, update } from "../controllers/editorController.js";
+import { aiEdit, create, list, read, remove, translate, voiceStart, voiceRefund, update } from "../controllers/editorController.js";
 
 const router = Router();
 
@@ -15,5 +15,7 @@ router.put("/projects/:id", lightLimiter, update);
 router.delete("/projects/:id", lightLimiter, remove);
 router.post("/ai", aiLimiter, requireGeminiKey, aiEdit);
 router.post("/translate", aiLimiter, requireGeminiKey, translate);
+router.post("/voice/start", aiLimiter, voiceStart);
+router.post("/voice/refund", aiLimiter, voiceRefund);
 
 export default router;

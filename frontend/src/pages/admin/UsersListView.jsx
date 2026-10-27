@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { SkeletonRows } from "../../components/ui/Skeleton";
 import { useNavigate } from "react-router-dom";
 import adminService from "../../services/adminService";
 
@@ -64,10 +65,7 @@ export default function UsersListView({ onUserSelect, currentUserId }) {
           <span>Joined</span>
         </div>
         {loading && users.length === 0 && (
-          <div className="admin-table-empty">
-            <i className="ri-loader-4-line is-spinning" aria-hidden="true"></i>{" "}
-            Loading users…
-          </div>
+          <div role="status" aria-busy="true" aria-label="Loading users"><SkeletonRows rows={7} cols={5} /></div>
         )}
         {shown.map((u) => (
           <div

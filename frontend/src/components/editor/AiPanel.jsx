@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import Select from "../ui/Select";
+import { VOICE_LIST } from "../../lib/editor/ai";
 import GeminiKeyPanel from "../tools/GeminiKey";
 
 const SUGGESTIONS = ["veAiEx1", "veAiEx2", "veAiEx3", "veAiEx4"];
@@ -69,17 +70,17 @@ export default function AiPanel({
         </label>
         <div className="ve-field"><span>{t("veVoice")}</span>
           {voice === "auto" && <small className="tk-hint">{t("veVoiceAutoHint")}</small>}
-          <div className="tk-seg">
-            <button type="button" className={voice === "auto" ? "active" : ""} onClick={() => setVoice("auto")}>{t("veVoiceAuto")}</button>
-            <button type="button" className={voice === "km-KH-PisethNeural" ? "active" : ""} onClick={() => setVoice("km-KH-PisethNeural")}>Piseth</button>
-            <button type="button" className={voice === "km-KH-SreymomNeural" ? "active" : ""} onClick={() => setVoice("km-KH-SreymomNeural")}>Sreymom</button>
-          </div>
+          <Select value={voice} onChange={(e) => setVoice(e.target.value)}>
+            <option value="auto">{t("veVoiceAuto")}</option>
+            {VOICE_LIST.map((v) => <option key={v.value} value={v.value}>{v.value} · {t(v.gender === "f" ? "veFemale" : "veMale")}</option>)}
+          </Select>
         </div>
         <label className="ve-field"><span>{t("veOriginalAudio")}</span>
           <Select value={orig} onChange={(e) => setOrig(e.target.value)}>
             <option value="duck">{t("veOrigDuck")}</option><option value="mute">{t("veOrigMute")}</option><option value="keep">{t("veOrigKeep")}</option>
           </Select>
         </label>
+        <p className="tk-hint"><i className="ri-coin-line" /> {t("veVoiceCost")}</p>
         <button type="button" className="tk-btn full" disabled={busy || !source} onClick={onTranslate}><i className="ri-translate-2" />{t("veTranslateBtn")}</button>
       </section>
       {!user && <p className="tk-hint">{t("tokLogin")}</p>}

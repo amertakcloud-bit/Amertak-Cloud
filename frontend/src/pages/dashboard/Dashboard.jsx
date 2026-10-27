@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Skeleton, SkeletonChart, SkeletonRows } from "../../components/ui/Skeleton";
 import { Link, Navigate } from "react-router-dom";
 import { useLanguage } from "../../context/LanguageContext";
 import { useAuth } from "../../context/AuthContext";
@@ -45,14 +46,19 @@ function Dashboard() {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
 
+  // Live data: loads once with skeletons, then refreshes silently every 45 s and when the tab regains focus
+  // (so a balance change by an admin or a finished payment appears without a reload).
   useEffect(() => {
-    if (!user || user.role === "admin") return;
+    if (!user || user.role === "admin") return undefined;
     let alive = true;
-    setError("");
-    api.get("/users/dashboard", { days, tz: new Date().getTimezoneOffset() })
-      .then((r) => alive && setData(r.data))
-      .catch((e) => alive && setError(e.message || "Error"));
-    return () => { alive = false; };
+    const load = () => api.get("/users/dashboard", { days, tz: new Date().getTimezoneOffset() })
+      .then((r) => { if (alive) { setData(r.data); setError(""); } })
+      .catch((e) => { if (alive) setError((prev) => prev || e.message || "Error"); });
+    load();
+    const timer = setInterval(() => { if (!document.hidden) load(); }, 45000);
+    const onVis = () => { if (!document.hidden) load(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { alive = false; clearInterval(timer); document.removeEventListener("visibilitychange", onVis); };
   }, [user, days]);
 
   const maxTool = useMemo(() => Math.max(1, ...(data?.byTool || []).map((x) => x.tokens)), [data]);
@@ -70,9 +76,9 @@ function Dashboard() {
 
       <div className="ud-stats">
         <div className="tk-card ud-stat"><i className="ri-coin-line" /><div><b>{data?.balance ?? user.tokens ?? 0}</b><span>{L("Token balance", "Token នៅសល់")}</span></div></div>
-        <div className="tk-card ud-stat"><i className="ri-fire-line" /><div><b>{data ? data.spent : "–"}</b><span>{L(`Spent (${days} days)`, `ចំណាយ (${days} ថ្ងៃ)`)}</span></div></div>
-        <div className="tk-card ud-stat"><i className="ri-calendar-todo-line" /><div><b>{data ? today : "–"}</b><span>{L("Spent today", "ចំណាយថ្ងៃនេះ")}</span></div></div>
-        <div className="tk-card ud-stat"><i className="ri-shopping-bag-3-line" /><div><b>{data ? data.boughtTokens : "–"}</b><span>{L("Tokens bought", "Token ដែលបានទិញ")}</span></div></div>
+        <div className="tk-card ud-stat"><i className="ri-fire-line" /><div><b>{data ? data.spent : <Skeleton h={20} w={48} />}</b><span>{L(`Spent (${days} days)`, `ចំណាយ (${days} ថ្ងៃ)`)}</span></div></div>
+        <div className="tk-card ud-stat"><i className="ri-calendar-todo-line" /><div><b>{data ? today : <Skeleton h={20} w={48} />}</b><span>{L("Spent today", "ចំណាយថ្ងៃនេះ")}</span></div></div>
+        <div className="tk-card ud-stat"><i className="ri-shopping-bag-3-line" /><div><b>{data ? data.boughtTokens : <Skeleton h={20} w={48} />}</b><span>{L("Tokens bought", "Token ដែលបានទិញ")}</span></div></div>
       </div>
 
       {error && <div className="tk-alert tk-alert-error">{error}</div>}
@@ -86,13 +92,14 @@ function Dashboard() {
             ))}
           </div>
         </header>
-        {data ? <PillarChart data={data.byDay} lang={lang} /> : <div className="ud-skel" />}
+        {data ? <PillarChart data={data.byDay} lang={lang} /> : <SkeletonChart />}
       </section>
 
       <div className="ud-two">
         <section className="tk-card ud-card">
           <h3>{L("Spent per tool", "ចំណាយតាម tool")}</h3>
           {data && data.byTool.length === 0 && <p className="ud-empty">{L("No usage yet.", "មិនទាន់មានការប្រើប្រាស់។")}</p>}
+          {!data && <SkeletonRows rows={4} cols={2} />}
           <ul className="ud-tools">
             {(data?.byTool || []).map((x) => {
               const m = TOOL_LABEL[x.tool] || { en: x.tool, km: x.tool, icon: "ri-apps-line" };
@@ -112,6 +119,7 @@ function Dashboard() {
           {data && data.payments.length === 0 && (
             <p className="ud-empty">{L("No purchases yet.", "មិនទាន់មានការទិញ។")} <Link to="/plants">{L("Buy tokens", "ទិញ token")}</Link></p>
           )}
+          {!data && <SkeletonRows rows={3} cols={2} />}
           <ul className="ud-list">
             {(data?.payments || []).map((p, i) => (
               <li key={i}>

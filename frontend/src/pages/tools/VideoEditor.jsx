@@ -20,7 +20,7 @@ import { RATES, tokensForBytes } from "../../lib/tokens";
 import { Engine } from "../../lib/editor/engine";
 import { deleteMedia, deleteProjectMedia, getMedia, probeMedia, putMedia } from "../../lib/editor/mediaStore";
 import { estimateWavBytes, extractAudio } from "../../lib/editor/extract";
-import { captionsFromFile, pool, translateLines, voiceClip, voiceForCue, voiceForGender, voiceMedia } from "../../lib/editor/ai";
+import { captionsFromFile, legacyVoice, pool, translateLines, voiceChars, voiceClip, voiceForCue, voiceForGender, voiceMedia } from "../../lib/editor/ai";
 import {
   addClip, addMedia, applyCaptionPreset, buildSrt, cuesToCaptionClips, cuesToTimelineCaptions, duplicateClip, makeMediaClip, makeTextClip,
   DEFAULT_HIGHLIGHT, newProject, parseSrt, projectDuration, removeClip, removeSilentRanges, rippleDelete, round3, setCaptionHighlight, splitClip, TEXT_PRESETS, trimEnd, trimStart, uid, updateClip,
@@ -532,23 +532,34 @@ function Workspace({ id }) {
       // Captions become the Khmer text (the voice reads exactly what is shown) and highlight the word being spoken.
       const hlStyle = (p) => ({ ...p.captionStyle, karaoke: true, hl: p.captionStyle.hl || DEFAULT_HIGHLIGHT });
       const caps = mapped.map((c, i) => ({ ...c, text: km[i] || c.text, id: uid("c") }));
-      edit((p) => ({ ...p, captionStyle: hlStyle(p), clips: [...p.clips.filter((c) => !(c.type === "caption" && c.source === src.id)), ...caps.map((c) => ({ ...c, style: hlStyle(p) }))] }));
 
-      progress(56, t("veTaskVoice"));
+      // Voices cost 1 token / 200 characters: paid once, before anything is generated (refunded if it fails).
+      const chars = caps.reduce((n, c) => n + voiceChars(c.text), 0);
+      progress(55, t("veTaskVoice"));
+      const started = (await toolsApi.voiceStart(chars)).data;
+      refreshUser();
+      let voiced = false;
       const results = new Array(caps.length);
-      let done = 0;
-      await pool(caps, 2, async (c, i) => {
-        results[i] = await voiceForCue({ text: c.text, voice: names[i], slot: c.dur, signal });
-        done += 1;
-        progress(56 + (done / caps.length) * 42);
-      }, signal);
+      try {
+        edit((p) => ({ ...p, captionStyle: hlStyle(p), clips: [...p.clips.filter((c) => !(c.type === "caption" && c.source === src.id)), ...caps.map((c) => ({ ...c, style: hlStyle(p) }))] }));
+        let done = 0;
+        await pool(caps, 2, async (c, i) => {
+          results[i] = await voiceForCue({ text: c.text, voice: names[i], slot: c.dur, signal, job: started.job });
+          done += 1;
+          progress(56 + (done / caps.length) * 42);
+        }, signal);
+        voiced = true;
+      } finally {
+        if (!voiced && !signal?.aborted) toolsApi.voiceRefund(started.job).then(() => refreshUser()).catch(() => {});
+      }
+      toast.info(t("veVoiceCharged").replace("{n}", String(started.cost)).replace("{c}", String(chars)));
 
       let next = projRef.current;
       const oldVoices = next.clips.filter((c) => c.lane === "voice" && c.source === src.id).map((c) => c.id);
       next = { ...next, clips: next.clips.filter((c) => !oldVoices.includes(c.id)) };
       for (let i = 0; i < caps.length; i++) {
         const v = results[i];
-        const m = voiceMedia(`voice-${i + 1}.mp3`, v.duration, v.blob.size);
+        const m = voiceMedia(`voice-${i + 1}.${/wav/i.test(v.blob.type) ? "wav" : "mp3"}`, v.duration, v.blob.size);
         await putMedia(id, m.id, v.blob);
         engine.current?.setMedia(m.id, v.blob);
         next = addClip(addMedia(next, m), { ...voiceClip(m, caps[i].start), source: src.id, text: caps[i].text, voice: names[i], cap: caps[i].id });
@@ -566,11 +577,20 @@ function Workspace({ id }) {
     const clean = String(text || "").replace(/\s+/g, " ").trim();
     if (!clean) { toast.info(t("veVoiceEmpty")); return; }
     const cap = projRef.current.clips.find((c) => c.id === vc.cap);
+    if (!user) { toast.info(t("tokLogin")); return; }
     await runTask(t("veTaskVoice"), async (signal, progress) => {
       progress(10);
-      const v = await voiceForCue({ text: clean, voice: voiceName, slot: Math.max(0.5, cap?.dur ?? vc.dur), signal });
+      const started = (await toolsApi.voiceStart(voiceChars(clean))).data; // 1 token / 200 characters
+      refreshUser();
+      let v;
+      try {
+        v = await voiceForCue({ text: clean, voice: voiceName, slot: Math.max(0.5, cap?.dur ?? vc.dur), signal, job: started.job });
+      } catch (e) {
+        if (!signal?.aborted) toolsApi.voiceRefund(started.job).then(() => refreshUser()).catch(() => {});
+        throw e;
+      }
       progress(75);
-      const m = voiceMedia(`voice-${Date.now().toString(36)}.mp3`, v.duration, v.blob.size);
+      const m = voiceMedia(`voice-${Date.now().toString(36)}.${/wav/i.test(v.blob.type) ? "wav" : "mp3"}`, v.duration, v.blob.size);
       await putMedia(id, m.id, v.blob);
       engine.current?.setMedia(m.id, v.blob);
       let next = updateClip(addMedia(projRef.current, m), vc.id, { mediaId: m.id, dur: round3(v.duration), offset: 0, text: clean, voice: voiceName });
@@ -769,7 +789,7 @@ function Workspace({ id }) {
                 <StageOverlay engine={engine} project={project} selected={selected} time={time} t={t}
                   onSelect={setSelected} onPreview={onPreview} onCommit={onCommit} onTextEdit={onTextEdit} />
               )}
-              {!loaded && <div className="ve-loading"><i className="ri-loader-4-line spin" /></div>}
+              {!loaded && <div className="ve-skel sk" role="status" aria-busy="true" aria-label={t("veLoading") || "Loading"} />}
             </div>
           </div>
           <div className="ve-transport">

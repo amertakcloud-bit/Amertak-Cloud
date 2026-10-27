@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { SkeletonPage } from "../../components/ui/Skeleton";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useLanguage } from "../../context/LanguageContext";
@@ -34,12 +35,7 @@ export default function AdminDashboard() {
   };
 
   if (authLoading) {
-    return (
-      <div className="auth-loader" role="status" aria-label="Loading">
-        <i className="ri-loader-4-line auth-loader-icon is-spinning" aria-hidden="true"></i>
-        <p>Loading admin dashboard…</p>
-      </div>
-    );
+    return <SkeletonPage kind="admin" label="Loading admin dashboard" />;
   }
 
   if (!normalizedUser) {

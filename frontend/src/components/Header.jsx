@@ -1,6 +1,7 @@
 import { useLanguage } from "../context/LanguageContext";
 import { useAuth } from "../context/AuthContext";
 import { NavLink } from "react-router-dom";
+import NotificationBell from "./NotificationBell";
 
 // this token function is example
 function userToken() {
@@ -60,6 +61,8 @@ function Header({ title, onMenuClick, onToggleSidebar, isSidebarCollapsed, theme
           <i className="ri-exchange-funds-line" aria-hidden="true"></i>
           {user && <span className="token-badge">{user.tokens ?? 0}</span>}
         </button>
+
+        <NotificationBell />
 
         {/* Language toggle */}
         <button

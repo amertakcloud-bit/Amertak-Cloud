@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { call as hcall } from "./helpers.js";
 
 // End-to-end through the REAL models/controllers/services with the SQLite fallback
 // (no MONGODB_URI, no CLOUD_MONGODB_URI). Skipped automatically if npm dependencies are missing.
@@ -26,6 +27,9 @@ try {
     editor: await import("../services/editorProjects.js"),
     pay: await import("../controllers/paymentController.js"),
     tg: await import("../lib/telegramOidc.js"),
+    editorCtl: await import("../controllers/editorController.js"),
+    ttsCtl: await import("../controllers/ttsController.js"),
+    gem: await import("../lib/geminiClient.js"),
     khqr: await import("../lib/khqr.js"),
   };
 } catch (e) {
@@ -268,4 +272,71 @@ run("Telegram OIDC: PKCE redirect → code exchange → verified ID token → se
   assert.equal(await m.User.countDocuments({ telegramId: "777" }), 1);
   delete process.env.TELEGRAM_CLIENT_SECRET;
   assert.equal((await call(m.auth.telegramLogin, req0)).location, "https://site.test/login?error=telegram_not_configured");
+});
+
+run("Editor voice job: 1 token / 200 chars, metered budget, refund once", async () => {
+  const u = await m.User.create({ name: "Voice", email: "voice@x.co", password: "password123" });
+  await m.User.updateOne({ _id: u._id }, { $set: { tokens: 10 } });
+  assert.equal((await hcall(m.editorCtl.voiceStart, { user: u, body: { chars: 0 } })).err.code, "INVALID_CHARS");
+  const s = (await hcall(m.editorCtl.voiceStart, { user: u, body: { chars: 401 } })).res; // ceil(401/200) = 3
+  assert.equal(s.body.data.cost, 3);
+  assert.equal((await m.User.findById(u._id)).tokens, 7);
+  const job = s.body.data.job;
+
+  // a synthesis request inside the job (fake Gemini): spends from the budget (3 × 200 = 600 chars)
+  const wav = Buffer.concat([Buffer.from("RIFF"), Buffer.alloc(4), Buffer.from("WAVEfmt "), Buffer.alloc(8), Buffer.from("data"), Buffer.alloc(4), Buffer.alloc(2000)]);
+  m.gem.deps.createClient = async () => ({ interactions: { create: async () => ({ output_audio: { data: wav.toString("base64") } }) } });
+  const speak = (chars) => hcall(m.ttsCtl.synthesizeText, { user: u, voiceJob: job, gemini: { key: "k", source: "server" }, body: { text: "ក".repeat(chars), voice: "Puck" } });
+  assert.ok((await speak(400)).res.body.length > 0);
+  assert.ok((await speak(200)).res.body.length > 0);
+  assert.equal((await speak(10)).err.code, "JOB_BUDGET_EXCEEDED"); // 600 / 600 used
+  // failure → refund exactly once
+  const r1 = (await hcall(m.editorCtl.voiceRefund, { user: u, body: { job } })).res;
+  assert.equal(r1.body.data.refunded, 3);
+  const r2 = (await hcall(m.editorCtl.voiceRefund, { user: u, body: { job } })).res;
+  assert.equal(r2.body.data.refunded, 0);
+  assert.equal((await m.User.findById(u._id)).tokens, 10);
+});
+
+run("ledger + notifications: admin grant/deduct, low balance, refund, audit, own-only", async () => {
+  const nc = await import("../controllers/notificationController.js");
+  const Ledger = (await import("../models/Ledger.js")).default;
+  const Notification = (await import("../models/Notification.js")).default;
+  const AuditLog = (await import("../models/AuditLog.js")).default;
+  const mk = async (email) => (await call(m.auth.register, { body: { name: "Ledger " + email[0], email, password: "password123", confirmPassword: "password123" } })).body;
+  await mk("led@example.com"); await mk("other@example.com");
+  const u = await m.User.findOne({ email: "led@example.com" });
+  const other = await m.User.findOne({ email: "other@example.com" });
+  const admin = { _id: other._id };
+
+  await call(m.admin.addTokens, { params: { userId: String(u._id) }, body: { tokens: 5, reason: "gift" }, user: admin });
+  const bad = await call(m.admin.deductTokens, { params: { userId: String(u._id) }, body: { tokens: 3 }, user: admin });
+  assert.equal(bad.code, 400, "deduct needs a reason");
+  const tooMuch = await call(m.admin.deductTokens, { params: { userId: String(u._id) }, body: { tokens: 9999, reason: "x" }, user: admin });
+  assert.equal(tooMuch.code, 400);
+  const ok = await call(m.admin.deductTokens, { params: { userId: String(u._id) }, body: { tokens: 5, reason: "mistake" }, user: admin });
+  assert.equal(ok.code, 200);
+
+  // spend down below 20 → one low-balance note; then refund → refund note
+  await m.billing.chargeTokens(u._id, 140, "caption"); // 150 → 10
+  await m.billing.chargeTokens(u._id, 1, "caption");   // stays low: no second note
+  await m.billing.refundTokens(u._id, 1, "caption");
+
+  const ledger = await Ledger.find({ user: u._id }).sort({ createdAt: 1 });
+  const reasons = ledger.map((x) => x.reason);
+  assert.deepEqual(reasons.filter((r) => !r.startsWith("usage") && !r.startsWith("refund")), ["admin_grant", "admin_deduct"]);
+  assert.ok(reasons.includes("refund:caption"));
+  assert.equal(ledger.find((x) => x.reason === "admin_grant").balance, 155);
+  assert.equal(ledger.at(-1).balance, 10);
+  const notes = await Notification.find({ user: u._id });
+  assert.equal(notes.filter((n) => n.type === "low_balance").length, 1);
+  for (const t of ["tokens_added", "tokens_removed", "refund"]) assert.ok(notes.some((n) => n.type === t), t);
+  assert.equal((await AuditLog.find({})).filter((a) => a.action.startsWith("tokens.")).length >= 2, true);
+
+  const mine = await call(nc.listNotifications, { user: u });
+  assert.equal(mine.body.data.unread, notes.length);
+  assert.ok(mine.body.data.items.every((n) => String(n.user) === String(u._id)), "only own notifications");
+  await call(nc.markAllRead, { user: u });
+  assert.equal((await call(nc.listNotifications, { user: u })).body.data.unread, 0);
+  assert.equal((await call(nc.listNotifications, { user: other })).body.data.items.some((n) => String(n.user) === String(u._id)), false);
 });

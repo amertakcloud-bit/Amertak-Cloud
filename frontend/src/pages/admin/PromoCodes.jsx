@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { SkeletonRows } from "../../components/ui/Skeleton";
 import { useNavigate } from "react-router-dom";
 import adminService from "../../services/adminService";
 import { useFeedback } from "../../components/ui/Feedback";
@@ -93,7 +94,7 @@ export default function PromoCodes() {
 
       {error && <div className="auth-alert error">{error}</div>}
       {loading && (
-        <div className="admin-table-empty">Loading promo codes…</div>
+        <div role="status" aria-busy="true" aria-label="Loading promo codes"><SkeletonRows rows={4} cols={5} /></div>
       )}
 
       <div className="admin-promo-codes-table">

@@ -7,6 +7,8 @@ const schema = new mongoose.Schema(
     user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     kind: { type: String, required: true },
     cost: { type: Number, required: true },
+    budget: { type: Number, default: 0 }, // metered jobs (voice): characters paid for
+    used: { type: Number, default: 0 }, // …and characters already spent
     refunded: { type: Boolean, default: false },
     createdAt: { type: Date, default: Date.now, expires: 60 * 60 * 24 * 7 }, // auto-clean after 7 days
   },

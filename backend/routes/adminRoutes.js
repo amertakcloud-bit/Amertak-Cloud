@@ -7,6 +7,9 @@ import {
   listUsers,
   getUserDetail,
   addTokens,
+  deductTokens,
+  listAudit,
+  userLedger,
   listPromoCodes,
   createPromoCode,
   deletePromoCode,
@@ -43,6 +46,9 @@ adminProtectedRouter.use(protect, protectAdmin);
 adminProtectedRouter.get("/users", listUsers);
 adminProtectedRouter.get("/users/:userId", getUserDetail);
 adminProtectedRouter.post("/users/:userId/tokens", addTokens);
+adminProtectedRouter.post("/users/:userId/tokens/deduct", deductTokens);
+adminProtectedRouter.get("/users/:userId/ledger", userLedger);
+adminProtectedRouter.get("/audit", listAudit);
 adminProtectedRouter.get("/promo-codes", listPromoCodes);
 adminProtectedRouter.post("/promo-codes", createPromoCode);
 adminProtectedRouter.delete("/promo-codes/:id", deletePromoCode);

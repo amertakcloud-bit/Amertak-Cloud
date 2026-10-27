@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { VOICE_LIST, legacyVoice } from "../../lib/editor/ai";
 import { DEFAULT_HIGHLIGHT, LANES } from "../../lib/editor/model";
 import Select from "../ui/Select";
 
@@ -49,14 +50,13 @@ function ColorPick({ value, onChange }) {
 // A generated Khmer voice: change the sentence / speaker and make it again.
 function VoiceSection({ clip, onRegenerate, busy, t }) {
   const [text, setText] = useState(clip.text || "");
-  const [voice, setVoice] = useState(clip.voice || "km-KH-PisethNeural");
+  const [voice, setVoice] = useState(legacyVoice(clip.voice));
   return (
     <Section title={t("veVoiceTitle")}>
       <textarea className="tk-input" rows={3} value={text} maxLength={500} onChange={(e) => setText(e.target.value)} placeholder={t("veVoiceText")} aria-label={t("veVoiceText")} />
-      <div className="tk-seg" role="group" aria-label={t("veVoice")}>
-        <button type="button" className={voice === "km-KH-PisethNeural" ? "active" : ""} onClick={() => setVoice("km-KH-PisethNeural")}>Piseth</button>
-        <button type="button" className={voice === "km-KH-SreymomNeural" ? "active" : ""} onClick={() => setVoice("km-KH-SreymomNeural")}>Sreymom</button>
-      </div>
+      <Select value={voice} onChange={(e) => setVoice(e.target.value)} aria-label={t("veVoice")}>
+        {VOICE_LIST.map((v) => <option key={v.value} value={v.value}>{v.value} · {t(v.gender === "f" ? "veFemale" : "veMale")}</option>)}
+      </Select>
       <button type="button" className="tk-btn full" disabled={busy || !text.trim()} onClick={() => onRegenerate(clip, text, voice)}>
         <i className="ri-mic-line" />{t("veRegenerate")}
       </button>

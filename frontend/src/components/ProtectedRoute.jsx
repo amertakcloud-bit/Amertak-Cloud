@@ -1,17 +1,14 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { SkeletonPage, useDelayed } from "./ui/Skeleton";
 
 // ProtectedRoute
 // Wraps private pages (/dashboard, /profile, /settings).
 // - While the /me check is running → show a loader (avoids flicker/redirect loops)
 // - Guest → redirect to /login (remembering where they wanted to go)
 export function AuthLoader() {
-  return (
-    <div className="auth-loader" role="status" aria-label="Checking session">
-      <i className="ri-loader-4-line auth-loader-icon" aria-hidden="true"></i>
-      <p>Checking your session…</p>
-    </div>
-  );
+  const show = useDelayed(true, 120); // no flash on fast checks
+  return show ? <SkeletonPage kind="dashboard" label="Checking your session" /> : null;
 }
 
 // Check if a user matches the required roles.

@@ -1,4 +1,5 @@
 import { asyncHandler } from "../middleware/errorMiddleware.js";
+import { afterGrant } from "../lib/ledger.js";
 import Payment from "../models/Payment.js";
 import User from "../models/User.js";
 import QRCode from "qrcode";
@@ -159,6 +160,7 @@ export async function fulfill(receipt) {
     await User.updateOne({ _id: receipt.user }, { $inc: { tokens: added } });
   }
   const user = await User.findById(receipt.user);
+  if (won) await afterGrant(receipt.user, added, "payment", { balance: user?.tokens ?? null, ref: String(receipt._id), title: `Payment received: +${added} tokens`, body: receipt.planName || "" });
   return { tokens: user?.tokens ?? 0, added, alreadyClaimed: added === 0, planName: receipt.planName };
 }
 

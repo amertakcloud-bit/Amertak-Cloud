@@ -37,6 +37,7 @@ import './styles/tools/cloudShare.css'
 import "./styles/tools/tts.css";
 import "./styles/tools/toolkit.css";
 import "./styles/feedback.css";
+import "./styles/skeleton.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>

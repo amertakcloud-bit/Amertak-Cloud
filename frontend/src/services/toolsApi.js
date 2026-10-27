@@ -86,7 +86,10 @@ export const toolsApi = {
 
   // ── TTS
   ttsVoices: () => request("/tts/voices"),
-  tts: (body, signal) => request("/tts", { method: "POST", json: body, blob: true, signal }),
+  // Free tool: the visitor's own Gemini key (x-gemini-api-key). Video Editor: pass { job } (paid voice job).
+  tts: (body, signal, { job = "" } = {}) => request("/tts", { method: "POST", json: body, blob: true, signal, withKey: !job, job }),
+  voiceStart: (chars) => request("/editor/voice/start", { method: "POST", json: { chars } }),
+  voiceRefund: (job) => request("/editor/voice/refund", { method: "POST", json: { job } }),
 
   // ── QR
   qr: (body) => request("/qr", { method: "POST", json: body, blob: true }),

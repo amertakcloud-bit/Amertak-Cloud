@@ -230,3 +230,53 @@ test("TTS uses Azure Speech first when configured (same Piseth/Sreymom voices)",
   assert.equal(r.provider, "azure"); assert.equal(seen.voice, "km-KH-SreymomNeural");
   delete process.env.AZURE_SPEECH_KEY; delete process.env.AZURE_SPEECH_REGION; delete process.env.TTS_ALLOW_FALLBACK;
 });
+
+test("Gemini TTS: Interactions request shape, voice/style mapping, long text, MP3 conversion", async () => {
+  const { synthesizeGemini, normalizeGeminiVoice, splitText, GEMINI_VOICES } = await import("../lib/geminiTts.js");
+  const wav = makeWav([{ sec: 1, tone: 300 }]);
+  const calls = [];
+  geminiDeps.createClient = async () => ({ interactions: { create: async (a) => { calls.push(a); return { output_audio: { data: wav.toString("base64") } }; } } });
+  try { ffDeps.ffmpegPath = async () => execFileSync("which", ["ffmpeg"]).toString().trim(); } catch { /* no ffmpeg → WAV fallback */ }
+
+  const r = await synthesizeGemini({ apiKey: "k", text: "សួស្តី​បង", voice: "Kore", style: "calm" });
+  assert.equal(calls[0].model, "gemini-3.8-flash-tts");
+  assert.deepEqual(calls[0].response_format, { type: "audio" });
+  assert.deepEqual(calls[0].generation_config, { speech_config: [{ voice: "Kore" }] });
+  assert.equal(calls[0].input[0].content[0].annotations[0].style, "calm and slow");
+  assert.ok(["audio/mpeg", "audio/wav"].includes(r.contentType) && r.audio.length > 500);
+  // natural style → no annotation; legacy Edge names map to Gemini voices
+  await synthesizeGemini({ apiKey: "k", text: "hi", voice: "km-KH-SreymomNeural" });
+  assert.equal(calls[1].generation_config.speech_config[0].voice, "Kore");
+  assert.equal(calls[1].input[0].content[0].annotations, undefined);
+  assert.equal(normalizeGeminiVoice("km-KH-PisethNeural"), "Puck");
+  assert.throws(() => normalizeGeminiVoice("Nope"), (e) => e.code === "INVALID_VOICE");
+  assert.ok(GEMINI_VOICES.some((v) => v.gender === "Male") && GEMINI_VOICES.some((v) => v.gender === "Female"));
+  // long text → several calls, one result
+  calls.length = 0;
+  const long = ("ប្រយោគមួយ។ ").repeat(300);
+  const pieces = splitText(long);
+  assert.ok(pieces.length > 1 && pieces.every((p) => p.length <= 900));
+  const l = await synthesizeGemini({ apiKey: "k", text: long, voice: "Puck" });
+  assert.equal(calls.length, pieces.length);
+  assert.ok(l.audio.length > r.audio.length);
+  // empty audio from the model → clear error
+  geminiDeps.createClient = async () => ({ interactions: { create: async () => ({}) } });
+  await rejectsCode(synthesizeGemini({ apiKey: "k", text: "x" }), "TTS_EMPTY");
+});
+
+test("TTS access: free tool needs the visitor's OWN key; paid job may use the server key", async () => {
+  const { requireOwnGeminiKey, ttsAccess } = await import("../middleware/geminiKey.js");
+  const run = (mw, req) => new Promise((res) => mw(Object.assign(req, { get: (k) => req.headers?.[k.toLowerCase()], headers: req.headers || {} }), {}, (e) => res(e || null)));
+  process.env.GEMINI_API_KEY = "server-key-server-key-server-key-1234";
+  // guest, no key → rejected; logged-in user without own key → rejected (server key must NOT be used)
+  assert.equal((await run(requireOwnGeminiKey, {}))?.code, "OWN_KEY_REQUIRED");
+  assert.equal((await run(requireOwnGeminiKey, { user: { _id: "u1" } }))?.code, "OWN_KEY_REQUIRED");
+  // own key in the header → ok
+  const req = { headers: { "x-gemini-api-key": "AIzaSyA1234567890abcdefghijklmnopqrstuv" } };
+  assert.equal(await run(requireOwnGeminiKey, req), null);
+  assert.equal(req.gemini?.source, "user");
+  // paid editor path: needs login and a valid job
+  assert.equal((await run(ttsAccess, { headers: { "x-job": "bad" } }))?.code, "LOGIN_REQUIRED");
+  assert.equal((await run(ttsAccess, { headers: { "x-job": "bad" }, user: { _id: "u1" } }))?.code, "JOB_REQUIRED");
+  delete process.env.GEMINI_API_KEY;
+});

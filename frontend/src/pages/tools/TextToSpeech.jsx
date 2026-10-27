@@ -4,13 +4,23 @@ import { toolsApi } from "../../services/toolsApi";
 import { friendlyError } from "../../lib/errors";
 import { useFeedback } from "../../components/ui/Feedback";
 import { useLanguage } from "../../context/LanguageContext";
+import Select from "../../components/ui/Select";
+import GeminiKeyPanel, { useGeminiAccess } from "../../components/tools/GeminiKey";
+import useToolsStatus from "../../hooks/useToolsStatus";
 
-const VOICES = [
-  { value: "km-KH-PisethNeural", label: "សម្លេងប្រុស" },
-  { value: "km-KH-SreymomNeural", label: "សម្លេងស្រី" },
+// Gemini TTS voices (the server sends the real list; this is the fallback while it loads).
+const FALLBACK_VOICES = [
+  { value: "Puck", label: "Puck", gender: "Male" }, { value: "Charon", label: "Charon", gender: "Male" },
+  { value: "Fenrir", label: "Fenrir", gender: "Male" }, { value: "Orus", label: "Orus", gender: "Male" },
+  { value: "Kore", label: "Kore", gender: "Female" }, { value: "Zephyr", label: "Zephyr", gender: "Female" },
+  { value: "Aoede", label: "Aoede", gender: "Female" }, { value: "Leda", label: "Leda", gender: "Female" },
 ];
-
 const SPEED_OPTIONS = [0.5, 1, 1.5, 2];
+// delivery style → [English, ខ្មែរ]
+const STYLE_LABELS = {
+  natural: ["Natural", "ធម្មតា"], warm: ["Warm & friendly", "កក់ក្តៅ ស្និទ្ធស្នាល"], calm: ["Calm & slow", "ស្ងប់ និងយឺត"],
+  cheerful: ["Cheerful", "រីករាយ"], serious: ["Serious & clear", "ម៉ឺងម៉ាត់ ច្បាស់"], fast: ["A bit faster", "លឿនបន្តិច"],
+};
 
 const formatTime = (value) => {
   if (!Number.isFinite(value)) return "0:00";
@@ -23,12 +33,24 @@ const formatTime = (value) => {
 };
 
 export default function TextToSpeech() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { toast } = useFeedback();
+  const km = language === "km";
+  const { data: toolsStatus } = useToolsStatus();
+  const access = useGeminiAccess(toolsStatus);
+  // The free voice tool never uses the site's key: only a key typed here or saved in the account counts.
+  const ownKey = access.source === "user" || access.source === "account";
+  const panelAccess = ownKey ? access : { ...access, source: "none", ready: false };
   const [text, setText] = useState("");
-  const [voice, setVoice] = useState("km-KH-PisethNeural");
-  const [speed, setSpeed] = useState(1);
+  const [voices, setVoices] = useState(FALLBACK_VOICES);
+  const [voice, setVoice] = useState("Puck");
+  const [style, setStyle] = useState("natural");
+  const [speed, setSpeed] = useState(1); // playback speed of the player (the voice itself is generated at natural pace)
+  useEffect(() => {
+    toolsApi.ttsVoices().then((r) => { if (r.provider === "gemini" && r.voices?.length) setVoices(r.voices); }).catch(() => {});
+  }, []);
   const [audioUrl, setAudioUrl] = useState("");
+  const [audioExt, setAudioExt] = useState("mp3");
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isReady, setIsReady] = useState(false);
@@ -117,15 +139,17 @@ export default function TextToSpeech() {
       return;
     }
 
+    if (!ownKey) { toast.info(t("keyRequired")); return; }
     setError("");
     setStatus("");
     setIsGenerating(true);
 
     try {
-      const { blob } = await toolsApi.tts({ text: trimmedText, voice });
+      const { blob } = await toolsApi.tts({ text: trimmedText, voice, style });
       const nextAudioUrl = URL.createObjectURL(blob);
 
       setAudioUrl(nextAudioUrl);
+      setAudioExt(/wav/i.test(blob.type) ? "wav" : "mp3");
       setError("");
       setStatus("");
       setIsPlaying(false);
@@ -159,7 +183,7 @@ export default function TextToSpeech() {
     if (!audioUrl) return;
     const link = document.createElement("a");
     link.href = audioUrl;
-    link.download = `khmer-voice-${voice}.mp3`;
+    link.download = `khmer-voice-${voice}.${audioExt}`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -190,6 +214,8 @@ export default function TextToSpeech() {
           Khmer AI <span style={{ color: "var(--primary)" }}>Voice</span>
         </h1>
 
+        <GeminiKeyPanel status={toolsStatus} access={panelAccess} />
+        <p className="tk-hint" style={{ margin: "6px 0 12px" }}>{km ? "ឧបករណ៍នេះឥតគិតថ្លៃ ប្រើ Gemini API key ផ្ទាល់ខ្លួនរបស់អ្នក (មិនកាត់ token)។" : "This tool is free — it uses your own Gemini API key (no tokens are charged)."}</p>
         <form onSubmit={handleGenerate} style={{ display: "grid", gap: 18 }}>
           <div>
             <div style={{ marginBottom: 8, fontWeight: 600, color: "var(--text-muted)", fontFamily: 'Kantumruy' }}>បញ្ចូលអត្ថបទ</div>
@@ -226,18 +252,11 @@ export default function TextToSpeech() {
                 <span> ប្រភេទសម្លេង</span>
               </div>
 
-              <div className="voice-toggle">
-                {VOICES.map((item) => (
-                  <button
-                    key={item.value}
-                    type="button"
-                    className={voice === item.value ? "active" : ""}
-                    onClick={() => setVoice(item.value)}
-                    >
-                      {item.label}
-                  </button>
+              <Select value={voice} onChange={(e) => setVoice(e.target.value)} aria-label="Voice">
+                {voices.map((v) => (
+                  <option key={v.value} value={v.value}>{v.label} · {v.gender === "Female" ? (km ? "ស្រី" : "Female") : (km ? "ប្រុស" : "Male")}</option>
                 ))}
-              </div>
+              </Select>
             </div>
 
             <div style={{display: 'none'}}>
@@ -261,8 +280,18 @@ export default function TextToSpeech() {
 
           <div>
             <div style={{ marginBottom: 8, fontWeight: 600, color: "var(--text-muted)", fontFamily: 'Kantumruy'}}>
+              <i className="ri-emotion-line"></i>
+              <span> {km ? "រចនាប័ទ្មសម្លេង" : "Voice style"}</span>
+            </div>
+            <Select value={style} onChange={(e) => setStyle(e.target.value)} aria-label="Style">
+              {Object.entries(STYLE_LABELS).map(([k, [en, kh]]) => <option key={k} value={k}>{km ? kh : en}</option>)}
+            </Select>
+          </div>
+
+          <div>
+            <div style={{ marginBottom: 8, fontWeight: 600, color: "var(--text-muted)", fontFamily: 'Kantumruy'}}>
               <i className="ri-speed-up-line"></i>
-              <span> ល្បឿនសម្លេង</span>
+              <span> {km ? "ល្បឿនចាក់" : "Playback speed"}</span>
             </div>
             <div className="speed-option" style={{ display: "flex", gap: 8 }}>
               {SPEED_OPTIONS.map((option) => (
@@ -289,7 +318,7 @@ export default function TextToSpeech() {
 
           <button
             type="submit"
-            disabled={isGenerating}
+            disabled={isGenerating || !ownKey}
             style={{
               border: "none",
               background: "var(--text)",

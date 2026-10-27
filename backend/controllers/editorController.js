@@ -1,7 +1,7 @@
 import { AppError } from "../lib/AppError.js";
 import { asyncHandler } from "../middleware/errorMiddleware.js";
 import { deps as geminiDeps, extractText, getModels, mapGeminiError, parseModelJson } from "../lib/geminiClient.js";
-import { withCharge } from "../lib/billing.js";
+import { RATES, refundJob, startJob, tokensForChars, withCharge } from "../lib/billing.js";
 import { planEdits } from "../services/editorAi.js";
 import { createProject, deleteProject, getProject, listProjects, updateProject } from "../services/editorProjects.js";
 
@@ -83,4 +83,20 @@ export const aiEdit = asyncHandler(async (req, res) => {
     "aiedit"
   );
   res.json({ success: true, data: { ...result, cost: AI_EDIT_COST, tokens: balance, keySource: req.gemini.source } });
+});
+
+// ── Voice (Gemini TTS) for the Video Editor: 1 token per 200 characters, charged when the job starts ──
+export const MAX_VOICE_CHARS = 60000;
+export const voiceStart = asyncHandler(async (req, res) => {
+  const chars = Math.floor(Number(req.body?.chars));
+  if (!Number.isFinite(chars) || chars <= 0 || chars > MAX_VOICE_CHARS) {
+    throw new AppError(400, "INVALID_CHARS", `"chars" must be between 1 and ${MAX_VOICE_CHARS}.`);
+  }
+  const cost = tokensForChars(chars);
+  const job = await startJob(req.user._id, "voice", cost, { budget: cost * RATES.voiceCharsPerToken });
+  res.json({ success: true, data: { job: job.token, cost: job.cost, tokens: job.balance } });
+});
+export const voiceRefund = asyncHandler(async (req, res) => {
+  const refunded = await refundJob(req.body?.job, req.user._id, "voice");
+  res.json({ success: true, data: { refunded } });
 });
