@@ -94,8 +94,8 @@ git push -u origin main
 | `KHQR_WEBHOOK_SECRET` | webhook secret | URL: `/api/payments/webhook` |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | ពី Google Cloud | ប្រសិនបើប្រើ Google login |
 | `GOOGLE_CALLBACK_URL` | `https://<backend>.vercel.app/api/auth/google/callback` | |
-| `TELEGRAM_BOT_ID` / `TELEGRAM_BOT_TOKEN` / `TELEGRAM_BOT_USERNAME` | token **ថ្មី** | ប្រសិនបើប្រើ Telegram login |
-| `TELEGRAM_CALLBACK_URL` | `https://<backend>.vercel.app/api/auth/telegram/callback` | |
+| `TELEGRAM_CLIENT_ID` / `TELEGRAM_CLIENT_SECRET` | ពី @BotFather → Login Widget | Telegram login (OpenID Connect) |
+| `TELEGRAM_REDIRECT_URI` | `https://<site>/api/auth/telegram/callback` | ត្រូវដូច Allowed URL ក្នុង BotFather បេះបិទ |
 | `MAX_UPLOAD_MB` | `4` | កុំលើស 4 លើ Vercel |
 
 5. **Deploy**។ បន្ទាប់មកសាកល្បង:
@@ -137,7 +137,7 @@ Login ប្រើ HTTP-only cookie `auth_token`។ `*.vercel.app` ពីរផ�
 - Frontend → `app.yourdomain.com`
 - Backend → `api.yourdomain.com`
 
-បន្ទាប់មកកែ `CLIENT_URL=https://app.yourdomain.com`, `VITE_API_URL=https://api.yourdomain.com/api`, `GOOGLE_CALLBACK_URL`/`TELEGRAM_CALLBACK_URL`/`SERVER_URL` ឱ្យត្រូវ ហើយ Redeploy ទាំងពីរ។ (Vercel → Project → Settings → Domains។)
+បន្ទាប់មកកែ `CLIENT_URL=https://app.yourdomain.com`, `VITE_API_URL=https://api.yourdomain.com/api`, `GOOGLE_CALLBACK_URL`/`TELEGRAM_REDIRECT_URI`/`SERVER_URL` ឱ្យត្រូវ ហើយ Redeploy ទាំងពីរ។ (Vercel → Project → Settings → Domains។)
 
 ឧបករណ៍ទាំងអស់ (SRT, QR, TTS, Image→Prompt, Video, Audio) **មិនត្រូវការ cookie** — មានតែ server key របស់ Gemini ប៉ុណ្ណោះដែលត្រូវការ login។
 
@@ -145,7 +145,7 @@ Login ប្រើ HTTP-only cookie `auth_token`។ `*.vercel.app` ពីរផ�
 Google Cloud Console → Credentials → OAuth client → **Authorized redirect URIs** បន្ថែម `https://<backend>.vercel.app/api/auth/google/callback` (ត្រូវដូចតម្លៃ `GOOGLE_CALLBACK_URL` បេះបិទ)។
 
 ### Telegram
-@BotFather → `/setdomain` → ដាក់ domain របស់ backend។
+@BotFather → ជ្រើស bot → **Bot Settings → Login Widget** → បន្ថែម Allowed URL `https://<site>/api/auth/telegram/callback` → copy **Client ID** និង **Client Secret** ដាក់ក្នុង Vercel env។ (ប្រើ OpenID Connect + PKCE; `/setdomain` widget ចាស់លែងប្រើ។)
 
 ---
 

@@ -1,43 +1,12 @@
 import crypto from "node:crypto";
+import jwt from "jsonwebtoken";
+import * as telegramOidc from "../lib/telegramOidc.js";
 import User from "../models/User.js";
 import { asyncHandler } from "../middleware/errorMiddleware.js";
 import { signToken, cookieOptions, AUTH_COOKIE } from "../middleware/authMiddleware.js";
 
 const EMAIL_REGEX = /^\S+@\S+\.\S+$/;
 const clientUrl = () => process.env.CLIENT_URL || "http://localhost:5173";
-
-function isTelegramConfigured() {
-  return Boolean(process.env.TELEGRAM_BOT_ID && process.env.TELEGRAM_BOT_TOKEN);
-}
-
-function buildTelegramUserName(profile) {
-  const first = (profile?.first_name || "").trim();
-  const last = (profile?.last_name || "").trim();
-  const base = [first, last].filter(Boolean).join(" ") || profile?.username || "Telegram User";
-  return base.trim().slice(0, 60) || "Telegram User";
-}
-
-function verifyTelegramHash(data, botToken) {
-  const { hash, ...fields } = data || {};
-  if (!hash || !botToken) return false;
-
-  const dataCheckString = Object.keys(fields)
-    .sort()
-    .map((key) => `${key}=${fields[key]}`)
-    .join("\n");
-
-  const secretKey = crypto.createHash("sha256").update(botToken).digest();
-  const expectedHash = crypto
-    .createHmac("sha256", secretKey)
-    .update(dataCheckString)
-    .digest("hex");
-
-  const actualHash = Buffer.from(hash, "hex");
-  const expectedBuffer = Buffer.from(expectedHash, "hex");
-
-  if (actualHash.length !== expectedBuffer.length) return false;
-  return crypto.timingSafeEqual(actualHash, expectedBuffer);
-}
 
 // Never send the password hash (or internals) to the client.
 function toPublicUser(user) {
@@ -251,82 +220,75 @@ export function googleNotConfigured(_req, res) {
   });
 }
 
-// GET /api/auth/telegram
-export function telegramLogin(_req, res) {
-  if (!isTelegramConfigured()) {
-    return res.redirect(`${clientUrl()}/login?error=telegram_not_configured`);
-  }
+// ───────── Telegram login: OpenID Connect (code flow + PKCE) ─────────
+// The state + PKCE verifier live in a short-lived, signed, HTTP-only cookie (serverless-safe: no memory/DB).
+const TG_COOKIE = "tg_oidc";
+const tgCookieOptions = () => ({ httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/api/auth/telegram", maxAge: 10 * 60 * 1000 });
+const tgSecret = () => process.env.SESSION_SECRET || "insecure-dev-secret-change-me";
 
-  const botId = encodeURIComponent(process.env.TELEGRAM_BOT_ID);
-  const redirectUri = encodeURIComponent(
-    `${process.env.TELEGRAM_CALLBACK_URL || `${process.env.SERVER_URL || "http://localhost:5000"}/api/auth/telegram/callback`}`
-  );
-
-  const authUrl = `https://oauth.telegram.org/auth?bot_id=${botId}&redirect_uri=${redirectUri}&request_access=write`;
-  return res.redirect(authUrl);
+// Must be registered EXACTLY in @BotFather → Bot Settings → Login Widget → Allowed URLs.
+export function telegramRedirectUri(req) {
+  const fixed = process.env.TELEGRAM_REDIRECT_URI || process.env.TELEGRAM_CALLBACK_URL;
+  if (fixed) return fixed;
+  const proto = String(req.headers?.["x-forwarded-proto"] || req.protocol || "https").split(",")[0].trim();
+  const host = String(req.headers?.["x-forwarded-host"] || req.get?.("host") || "").split(",")[0].trim();
+  return `${proto}://${host}/api/auth/telegram/callback`;
 }
 
-// GET /api/auth/telegram/callback
+// GET /api/auth/telegram → redirects the browser to Telegram
+export function telegramLogin(req, res) {
+  if (!telegramOidc.isConfigured()) return res.redirect(`${clientUrl()}/login?error=telegram_not_configured`);
+  const { clientId } = telegramOidc.telegramConfig();
+  const state = telegramOidc.newState();
+  const verifier = telegramOidc.newVerifier();
+  res.cookie(TG_COOKIE, jwt.sign({ state, verifier }, tgSecret(), { expiresIn: "10m" }), tgCookieOptions());
+  return res.redirect(telegramOidc.buildAuthUrl({ clientId, redirectUri: telegramRedirectUri(req), state, verifier }));
+}
+
+// GET /api/auth/telegram/callback?code&state  (or ?error=…)
 export async function telegramCallback(req, res) {
-  try {
-    const botToken = process.env.TELEGRAM_BOT_TOKEN;
-    const botUsername = (process.env.TELEGRAM_BOT_USERNAME || "").replace(/^@/, "");
-
-    if (!isTelegramConfigured()) {
-      return res.redirect(`${clientUrl()}/login?error=telegram_not_configured`);
-    }
-
-    const payload = { ...req.query };
-    const hash = payload.hash;
-    if (!hash || !verifyTelegramHash(payload, botToken)) {
-      return res.redirect(`${clientUrl()}/login?error=telegram_failed`);
-    }
-
-    const telegramId = String(payload.id || "");
-    const firstName = String(payload.first_name || "");
-    const lastName = String(payload.last_name || "");
-    const username = String(payload.username || "").trim();
-    const email = payload.email
-      ? String(payload.email).trim().toLowerCase()
-      : `telegram_${telegramId}@telegram.local`;
-
-    if (!telegramId) {
-      return res.redirect(`${clientUrl()}/login?error=telegram_failed`);
-    }
-
-    let user = await User.findOne({
-      $or: [{ telegramId }, ...(email ? [{ email }] : [])],
-    });
-
-    if (user) {
-      user.telegramId = telegramId;
-      if (!user.email && email) user.email = email;
-      if (!user.name) {
-        user.name = [firstName, lastName].filter(Boolean).join(" ") || username || botUsername || "Telegram User";
-      }
-      if (!user.avatar && payload.photo_url) user.avatar = String(payload.photo_url);
-      await user.save();
-    } else {
-      user = await User.create({
-        name: [firstName, lastName].filter(Boolean).join(" ") || username || botUsername || "Telegram User",
-        email,
-        provider: "telegram",
-        telegramId,
-        avatar: payload.photo_url || "",
-      });
-    }
-
-    setAuthCookie(res, user);
-    return res.redirect(`${clientUrl()}/dashboard`);
-  } catch (_error) {
+  const fail = (why) => {
+    console.warn("[Telegram] login failed:", why);
+    res.clearCookie(TG_COOKIE, { ...tgCookieOptions(), maxAge: undefined });
     return res.redirect(`${clientUrl()}/login?error=telegram_failed`);
-  }
-}
+  };
+  try {
+    if (!telegramOidc.isConfigured()) return res.redirect(`${clientUrl()}/login?error=telegram_not_configured`);
+    const { clientId, clientSecret } = telegramOidc.telegramConfig();
+    if (req.query.error) return fail(`provider error: ${String(req.query.error).slice(0, 60)}`);
+    const code = String(req.query.code || "");
+    const state = String(req.query.state || "");
+    if (!code || !state) return fail("missing code/state");
 
-export function telegramNotConfigured(_req, res) {
-  return res.status(503).json({
-    success: false,
-    message:
-      "Telegram login is not configured. Set TELEGRAM_BOT_ID, TELEGRAM_BOT_TOKEN, and TELEGRAM_BOT_USERNAME in server/.env.",
-  });
+    // 1) state + PKCE verifier from our own signed cookie (CSRF / login-fixation protection)
+    let saved;
+    try { saved = jwt.verify(req.cookies?.[TG_COOKIE] || "", tgSecret()); } catch { return fail("state cookie missing/expired"); }
+    const a = Buffer.from(String(saved.state)); const b = Buffer.from(state);
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return fail("state mismatch");
+    res.clearCookie(TG_COOKIE, { ...tgCookieOptions(), maxAge: undefined });
+
+    // 2) code → tokens (server-side, client secret via HTTP Basic) and 3) verify the ID token cryptographically
+    const tokens = await telegramOidc.exchangeCode({ code, redirectUri: telegramRedirectUri(req), verifier: saved.verifier, clientId, clientSecret });
+    const claims = await telegramOidc.verifyIdToken(tokens.id_token, clientId);
+
+    const telegramId = String(claims.id ?? claims.sub ?? "");
+    if (!/^\d{1,20}$/.test(telegramId)) return fail("no valid telegram id");
+    const name = String(claims.name || [claims.given_name, claims.family_name].filter(Boolean).join(" ") || claims.preferred_username || "Telegram User").trim().slice(0, 60) || "Telegram User";
+    const picture = typeof claims.picture === "string" && /^https:\/\//.test(claims.picture) ? claims.picture : "";
+
+    // 4) find (by verified Telegram id only) or create the account
+    let user = await User.findOne({ telegramId });
+    if (user) {
+      if (!user.avatar && picture) { user.avatar = picture; await user.save(); }
+    } else {
+      user = await User.create({ name, email: `telegram_${telegramId}@telegram.local`, provider: "telegram", telegramId, avatar: picture });
+      await User.updateOne({ _id: user._id }, { $set: { tokens: 150 } }); // same free-plan tokens as email sign-up
+    }
+
+    // 5) our own session (same as Google: HTTP-only cookie + #token fragment fallback)
+    const token = setAuthCookie(res, user);
+    return res.redirect(`${clientUrl()}/dashboard#token=${encodeURIComponent(token)}`);
+  } catch (err) {
+    return fail(err?.message || "unexpected error");
+  }
 }

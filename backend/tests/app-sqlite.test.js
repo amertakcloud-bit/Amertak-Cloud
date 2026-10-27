@@ -25,6 +25,7 @@ try {
     qr: await import("../services/qrImageService.js"),
     editor: await import("../services/editorProjects.js"),
     pay: await import("../controllers/paymentController.js"),
+    tg: await import("../lib/telegramOidc.js"),
     khqr: await import("../lib/khqr.js"),
   };
 } catch (e) {
@@ -40,7 +41,8 @@ const call = (fn, req) => new Promise((resolve, reject) => {
   res.json = (b) => { res.body = b; done(); return res; };
   res.cookie = (k, v) => { res.cookies[k] = v; return res; };
   res.clearCookie = () => res;
-  res.redirect = done;
+  res.redirect = (loc) => { res.location = loc; done(); };
+  res.headersSent = false;
   fn({ body: {}, query: {}, params: {}, headers: {}, get: () => "", ...req }, res, (e) => (e ? reject(e) : done()));
 });
 
@@ -180,4 +182,90 @@ run("KHQR.dev payment: create → poll → webhook (signed, replay-safe, idempot
   const after = (await m.User.findById(u._id)).tokens;
   assert.ok(after > before);
   assert.equal(after - before, c.body.data.plan.tokens);
+});
+
+run("Telegram OIDC: PKCE redirect → code exchange → verified ID token → session (and every rejection)", async () => {
+  const crypto = await import("node:crypto");
+  const jwt = (await import("jsonwebtoken")).default; // only for our own HS256 session/state tokens
+  process.env.TELEGRAM_CLIENT_ID = "123456789"; process.env.TELEGRAM_CLIENT_SECRET = "sekret";
+  delete process.env.TELEGRAM_REDIRECT_URI; delete process.env.TELEGRAM_CALLBACK_URL;
+  process.env.CLIENT_URL = "https://site.test";
+  const mk = () => crypto.generateKeyPairSync("rsa", { modulusLength: 2048 });
+  const good = mk(), evil = mk();
+  const jwk = { ...good.publicKey.export({ format: "jwk" }), kid: "k1", alg: "RS256", use: "sig" };
+  let tokenReq = null, claims, signer = good.privateKey;
+  // RS256 ID tokens signed with node:crypto (like Telegram does)
+  const sign = (c, key = signer, o = {}) => {
+    const now = Math.floor(Date.now() / 1000);
+    const h = Buffer.from(JSON.stringify({ alg: "RS256", kid: "k1", typ: "JWT" })).toString("base64url");
+    const p = Buffer.from(JSON.stringify({ iss: o.issuer ?? "https://oauth.telegram.org", aud: o.audience ?? "123456789", sub: "sub-1", iat: now, exp: now + (o.expiresIn ?? 3600), ...c })).toString("base64url");
+    return `${h}.${p}.${crypto.sign("sha256", Buffer.from(`${h}.${p}`), key).toString("base64url")}`;
+  };
+  m.tg.deps.fetch = async (url, o) => {
+    if (url.endsWith("/jwks.json")) return { ok: true, status: 200, json: async () => ({ keys: [jwk] }) };
+    tokenReq = { url, headers: o.headers, body: new URLSearchParams(String(o.body)) };
+    return { ok: true, status: 200, json: async () => ({ access_token: "a", id_token: sign(claims) }) };
+  };
+  m.tg.resetJwksCache();
+
+  // 1) /auth/telegram → redirect with PKCE + state, signed cookie set
+  const req0 = { headers: { "x-forwarded-proto": "https", "x-forwarded-host": "site.test" }, query: {}, cookies: {} };
+  const r0 = await call(m.auth.telegramLogin, req0);
+  const loc = new URL(r0.location);
+  assert.equal(loc.origin + loc.pathname, "https://oauth.telegram.org/auth");
+  assert.equal(loc.searchParams.get("client_id"), "123456789");
+  assert.equal(loc.searchParams.get("redirect_uri"), "https://site.test/api/auth/telegram/callback");
+  assert.equal(loc.searchParams.get("code_challenge_method"), "S256");
+  assert.equal(loc.searchParams.get("scope"), "openid profile");
+  assert.ok(!loc.search.includes("sekret"), "client secret must never be in the browser URL");
+  const state = loc.searchParams.get("state");
+  const cookie = r0.cookies.tg_oidc;
+  assert.ok(cookie);
+  const saved = jwt.verify(cookie, process.env.SESSION_SECRET);
+  assert.equal(saved.state, state);
+  assert.equal(loc.searchParams.get("code_challenge"), m.tg.challengeOf(saved.verifier));
+
+  const cb = (query, ck = cookie) => call(m.auth.telegramCallback, { ...req0, query, cookies: ck ? { tg_oidc: ck } : {} });
+  const failed = (r) => r.location === "https://site.test/login?error=telegram_failed";
+
+  // 2) rejections (none of them may create a user)
+  claims = { id: 777, name: "Sok Dara", preferred_username: "sokdara", picture: "https://t.me/i/userpic/320/x.jpg" };
+  assert.ok(failed(await cb({ code: "c", state }, "")));                       // no cookie
+  assert.ok(failed(await cb({ code: "c", state: "other" })));                  // state mismatch
+  assert.ok(failed(await cb({ state })));                                      // no code
+  assert.ok(failed(await cb({ error: "access_denied", state })));              // user cancelled
+  signer = evil.privateKey;                                                    // forged signature
+  assert.ok(failed(await cb({ code: "c", state })));
+  signer = good.privateKey;
+  const badClaims = [{ ...claims, _o: { audience: "999" } }, { ...claims, _o: { issuer: "https://evil.example" } }, { ...claims, _o: { expiresIn: -120 } }];
+  for (const bc of badClaims) {
+    const { _o, ...c } = bc; claims = c;
+    m.tg.deps.fetch = (orig => async (u, o) => u.endsWith("/jwks.json") ? orig(u, o) : { ok: true, status: 200, json: async () => ({ id_token: sign(c, good.privateKey, _o) }) })(m.tg.deps.fetch);
+    assert.ok(failed(await cb({ code: "c", state })), JSON.stringify(_o));
+  }
+  assert.equal(await m.User.findOne({ telegramId: "777" }), null);
+
+  // 3) success → user created, session cookie + #token fragment
+  m.tg.deps.fetch = async (url, o) => url.endsWith("/jwks.json") ? { ok: true, status: 200, json: async () => ({ keys: [jwk] }) }
+    : (tokenReq = { url, headers: o.headers, body: new URLSearchParams(String(o.body)) }, { ok: true, status: 200, json: async () => ({ id_token: sign(claims) }) });
+  claims = { id: 777, name: "Sok Dara", preferred_username: "sokdara", picture: "https://t.me/i/userpic/320/x.jpg" };
+  const ok = await cb({ code: "the-code", state });
+  assert.match(ok.location, /^https:\/\/site\.test\/dashboard#token=/);
+  assert.equal(tokenReq.url, "https://oauth.telegram.org/token");
+  assert.equal(tokenReq.headers.Authorization, "Basic " + Buffer.from("123456789:sekret").toString("base64"));
+  assert.equal(tokenReq.body.get("grant_type"), "authorization_code");
+  assert.equal(tokenReq.body.get("code"), "the-code");
+  assert.equal(tokenReq.body.get("code_verifier"), saved.verifier);
+  assert.equal(tokenReq.body.get("redirect_uri"), "https://site.test/api/auth/telegram/callback");
+  assert.ok(ok.cookies.auth_token);
+  const u = await m.User.findOne({ telegramId: "777" });
+  assert.equal(u.name, "Sok Dara"); assert.equal(u.provider, "telegram"); assert.equal(u.tokens, 150);
+  const sessionId = jwt.verify(decodeURIComponent(ok.location.split("#token=")[1]), process.env.SESSION_SECRET).id;
+  assert.equal(String(sessionId), String(u._id));
+
+  // 4) second login reuses the account; not configured → friendly redirect
+  await cb({ code: "again", state });
+  assert.equal(await m.User.countDocuments({ telegramId: "777" }), 1);
+  delete process.env.TELEGRAM_CLIENT_SECRET;
+  assert.equal((await call(m.auth.telegramLogin, req0)).location, "https://site.test/login?error=telegram_not_configured");
 });

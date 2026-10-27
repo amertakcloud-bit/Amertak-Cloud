@@ -11,7 +11,6 @@ import {
   googleNotConfigured,
   telegramLogin,
   telegramCallback,
-  telegramNotConfigured,
 } from "../controllers/authController.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { isGoogleConfigured } from "../config/passport.js";
@@ -59,12 +58,9 @@ if (isGoogleConfigured) {
   router.get("/google/callback", googleNotConfigured);
 }
 
-if (process.env.TELEGRAM_BOT_ID && process.env.TELEGRAM_BOT_TOKEN) {
-  router.get("/telegram", authLimiter, telegramLogin);
-  router.get("/telegram/callback", telegramCallback);
-} else {
-  router.get("/telegram", authLimiter, telegramNotConfigured);
-  router.get("/telegram/callback", telegramNotConfigured);
-}
+// Telegram OpenID Connect — the handlers themselves redirect to /login?error=telegram_not_configured
+// when TELEGRAM_CLIENT_ID / TELEGRAM_CLIENT_SECRET are missing.
+router.get("/telegram", authLimiter, telegramLogin);
+router.get("/telegram/callback", authLimiter, telegramCallback);
 
 export default router;
