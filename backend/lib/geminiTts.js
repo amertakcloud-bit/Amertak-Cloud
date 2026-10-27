@@ -91,12 +91,22 @@ function audioFrom(res) {
 async function one(client, { text, voice, style }) {
   const prompt = { type: "text", text };
   if (style) prompt.annotations = [{ type: "speech_metadata", style }];
-  const res = await client.interactions.create({
-    model: ttsModel(),
-    input: [{ type: "user_input", content: [prompt] }],
-    response_format: { type: "audio" },
-    generation_config: { speech_config: [{ voice }] },
-  });
+  // A request that never answers must not hang the whole job: give up after TTS_TIMEOUT_MS (default 45 s).
+  let timer;
+  const limit = Number(process.env.TTS_TIMEOUT_MS) || 45000;
+  const timeout = new Promise((_, rej) => { timer = setTimeout(() => rej(new AppError(504, "TTS_TIMEOUT", "Gemini took too long to make this voice. Please try again.")), limit); });
+  let res;
+  try {
+    res = await Promise.race([
+      client.interactions.create({
+        model: ttsModel(),
+        input: [{ type: "user_input", content: [prompt] }],
+        response_format: { type: "audio" },
+        generation_config: { speech_config: [{ voice }] },
+      }),
+      timeout,
+    ]);
+  } finally { clearTimeout(timer); }
   const b64 = audioFrom(res);
   if (!b64) throw new AppError(502, "TTS_EMPTY", "Gemini returned no audio for this text. Try a shorter or different text.");
   return Buffer.from(b64, "base64");
@@ -124,7 +134,7 @@ export async function synthesizeGemini({ apiKey, text, voice, style = "natural" 
     throw mapGeminiError(err);
   }
   try {
-    const mp3 = await convertToAudio(wav, { format: "mp3", bitrate: 96 });
+    const mp3 = await convertToAudio(wav, { format: "mp3", bitrate: 96, timeoutMs: 12000 });
     return { audio: mp3.audio, contentType: "audio/mpeg", voice: v, provider: "gemini", chars: clean.length };
   } catch {
     return { audio: wav, contentType: "audio/wav", voice: v, provider: "gemini", chars: clean.length }; // ffmpeg unavailable → still works

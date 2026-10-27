@@ -39,6 +39,8 @@ import "./styles/tools/toolkit.css";
 import "./styles/feedback.css";
 import "./styles/skeleton.css";
 
+try { if (localStorage.getItem("reduceMotion") === "1") document.documentElement.setAttribute("data-motion", "reduce"); } catch { /* ignore */ }
+
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <BrowserRouter>

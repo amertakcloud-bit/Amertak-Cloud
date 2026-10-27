@@ -180,3 +180,5 @@ input:focus-visible {
   font-weight: 800;
   src: url(../assets/fonts/Nunito-Italic.ttf);
 }
+/* Settings → "Reduce animations" */
+[data-motion="reduce"] *, [data-motion="reduce"] *::before, [data-motion="reduce"] *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }

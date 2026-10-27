@@ -262,6 +262,11 @@ test("Gemini TTS: Interactions request shape, voice/style mapping, long text, MP
   // empty audio from the model → clear error
   geminiDeps.createClient = async () => ({ interactions: { create: async () => ({}) } });
   await rejectsCode(synthesizeGemini({ apiKey: "k", text: "x" }), "TTS_EMPTY");
+  // a request that never answers → TTS_TIMEOUT instead of hanging
+  process.env.TTS_TIMEOUT_MS = "60";
+  geminiDeps.createClient = async () => ({ interactions: { create: () => new Promise(() => {}) } });
+  await rejectsCode(synthesizeGemini({ apiKey: "k", text: "x" }), "TTS_TIMEOUT");
+  delete process.env.TTS_TIMEOUT_MS;
 });
 
 test("TTS access: free tool needs the visitor's OWN key; paid job may use the server key", async () => {

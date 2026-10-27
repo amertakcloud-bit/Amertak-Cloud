@@ -114,8 +114,13 @@ export default function CloudShare() {
 
   return (
     <div className="page cs-page">
-      <h1 className="page-heading" style={{ marginBottom: 8 }}>{t("csTitle")}</h1>
-      <p className="page-subtitle" style={{ maxWidth: 620, marginBottom: 20 }}>{t("csSub")}</p>
+      <header className="cs-head">
+        <span className="cs-badge"><i className="ri-cloud-line" aria-hidden="true" /></span>
+        <div>
+          <h1 className="page-heading" style={{ margin: 0 }}>{t("csTitle")}</h1>
+          <p className="page-subtitle" style={{ margin: "4px 0 0", maxWidth: 620 }}>{t("csSub")}</p>
+        </div>
+      </header>
 
       {!cfg.available && (
         <div className="tk-alert err" role="alert" style={{ marginBottom: 16 }}>
@@ -123,6 +128,7 @@ export default function CloudShare() {
         </div>
       )}
 
+      <div className="cs-layout">
       <section className="cs-card" aria-live="polite">
         {view === "select" && (
           <div className="cs-step">
@@ -201,6 +207,17 @@ export default function CloudShare() {
           </div>
         )}
       </section>
+
+      <aside className="cs-side" aria-label={t("csHow")}>
+        <h2 className="cs-side-h">{t("csHow")}</h2>
+        <ol className="cs-steps">
+          <li><i className="ri-upload-cloud-2-line" aria-hidden="true" /><div><b>{t("csStep1")}</b><span>{t("csStep1d")}</span></div></li>
+          <li><i className="ri-timer-line" aria-hidden="true" /><div><b>{t("csStep2")}</b><span>{t("csStep2d")}</span></div></li>
+          <li><i className="ri-links-line" aria-hidden="true" /><div><b>{t("csStep3")}</b><span>{t("csStep3d")}</span></div></li>
+        </ol>
+        <p className="cs-muted"><i className="ri-coin-line" aria-hidden="true" /> {t("csPriceNote").replace("{n}", String(RATES.cloudSharePerMB))}</p>
+      </aside>
+      </div>
     </div>
   );
 }

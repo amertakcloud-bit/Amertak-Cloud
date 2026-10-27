@@ -12,14 +12,21 @@ export class ApiError extends Error {
   }
 }
 
-async function request(path, { method = "GET", json, form, headers = {}, blob = false, signal, params, withKey = false, job = "" } = {}) {
+async function request(path, { method = "GET", json, form, headers = {}, blob = false, signal, params, withKey = false, job = "", timeoutMs = 0 } = {}) {
   const qs = params ? `?${new URLSearchParams(Object.entries(params).filter(([, v]) => v !== undefined && v !== ""))}` : "";
   let res;
+  // Optional hard timeout: a request that never answers becomes a retryable TIMEOUT error instead of hanging forever.
+  const ctl = timeoutMs ? new AbortController() : null;
+  let timedOut = false, timer;
+  if (ctl) {
+    timer = setTimeout(() => { timedOut = true; ctl.abort(); }, timeoutMs);
+    if (signal) { if (signal.aborted) ctl.abort(); else signal.addEventListener("abort", () => ctl.abort(), { once: true }); }
+  }
   try {
     res = await fetch(`${API_URL}${path}${qs}`, {
       method,
       credentials: "include",
-      signal,
+      signal: ctl ? ctl.signal : signal,
       headers: {
         ...(json !== undefined ? { "Content-Type": "application/json" } : {}),
         ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
@@ -30,11 +37,14 @@ async function request(path, { method = "GET", json, form, headers = {}, blob = 
       body: json !== undefined ? JSON.stringify(json) : form,
     });
   } catch (e) {
+    if (timer) clearTimeout(timer);
+    if (timedOut) throw new ApiError("The server took too long to answer.", { code: "TIMEOUT" });
     if (e?.name === "AbortError") throw new ApiError("Cancelled", { code: "ABORTED" });
     console.error(`[API] request failed: ${API_URL}${path} (page origin: ${window.location.origin}). Check VITE_API_URL and the backend CLIENT_URL.`);
     throw new ApiError("Cannot reach the server. Please check your connection.", { code: "NETWORK" });
   }
 
+  if (timer) clearTimeout(timer);
   if (!res.ok) {
     let data = null;
     try { data = await res.json(); } catch { /* not JSON (e.g. Vercel 413 page) */ }
@@ -50,15 +60,16 @@ async function request(path, { method = "GET", json, form, headers = {}, blob = 
 }
 
 // retries transient failures (network / 429 / 5xx) with backoff
-export async function withRetry(fn, { retries = 2, baseMs = 800, signal } = {}) {
+export async function withRetry(fn, { retries = 2, baseMs = 800, signal, onRetry } = {}) {
   let last;
   for (let i = 0; i <= retries; i++) {
     try {
       return await fn();
     } catch (e) {
       last = e;
-      const transient = e instanceof ApiError && (e.code === "NETWORK" || e.status === 429 || e.status >= 500 || e.status === 0) && e.code !== "ABORTED";
+      const transient = e instanceof ApiError && (e.code === "NETWORK" || e.code === "TIMEOUT" || e.status === 429 || e.status >= 500 || e.status === 0) && e.code !== "ABORTED";
       if (!transient || i === retries || signal?.aborted) throw e;
+      onRetry?.(i + 1, e);
       await new Promise((r) => setTimeout(r, baseMs * 2 ** i));
     }
   }
@@ -87,7 +98,7 @@ export const toolsApi = {
   // ── TTS
   ttsVoices: () => request("/tts/voices"),
   // Free tool: the visitor's own Gemini key (x-gemini-api-key). Video Editor: pass { job } (paid voice job).
-  tts: (body, signal, { job = "" } = {}) => request("/tts", { method: "POST", json: body, blob: true, signal, withKey: !job, job }),
+  tts: (body, signal, { job = "" } = {}) => request("/tts", { method: "POST", json: body, blob: true, signal, withKey: !job, job, timeoutMs: 70000 }),
   voiceStart: (chars) => request("/editor/voice/start", { method: "POST", json: { chars } }),
   voiceRefund: (job) => request("/editor/voice/refund", { method: "POST", json: { job } }),
 

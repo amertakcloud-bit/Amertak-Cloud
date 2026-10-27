@@ -71,6 +71,11 @@ export const en = {
   ttsReady: "Audio is ready.", ttsEmpty: "Please enter some Khmer text first.", ttsChars: "characters",
 
   // CloudShare
+  settingsAppearance: "Appearance", settingsTheme: "Theme", settingsDark: "Dark", settingsLight: "Light", settingsReduce: "Reduce animations", settingsReduceHint: "Fewer movements and shimmer effects. Good for slow phones.",
+  settingsAccount: "Account", settingsPlan: "Tokens and billing", settingsGemini: "Gemini API key", settingsGeminiHint: "Used by the free Voice tool and by AI features. Saved encrypted on your account when you are logged in.",
+  settingsData: "Data on this device", settingsDataHint: "Resets language, theme and animation choices stored in this browser. Your projects and account are not touched.", settingsReset: "Reset preferences", settingsDone: "Preferences reset.",
+  settingsLogin: "Log in to see your account.", settingsRole: "Role", settingsTokens: "Tokens", settingsTopUp: "Top up", settingsProfile: "Edit profile", settingsLogout: "Log out", settingsLangHint: "Changes the whole site.",
+  csHow: "How it works", csStep1: "Upload", csStep1d: "Choose or drop a file.", csStep2: "Pick an expiry", csStep2d: "The link can stop working after 1 hour, 1 day or 7 days.", csStep3: "Share the link", csStep3d: "Anyone with the link can download it.", csPriceNote: "Uploads cost {n} tokens per MB (rounded up).",
   csChooseFile: "Please choose a file first.",   csUnavailable: "CloudShare is not set up on this server yet (the CloudShare database is missing).",
   csTitle: "Cloud Share", csSub: "Upload a file, get a link, and share it anywhere.", csDrop: "Drag & drop your file here", csOr: "or", csBrowse: "Browse files",
   csExpires: "Link expires", csNever: "Never", cs1h: "In 1 hour", cs1d: "In 1 day", cs7d: "In 7 days", csMax: "Maximum file size", csUpload: "Upload file",
@@ -160,6 +165,11 @@ export const km = {
   ttsReady: "សម្លេងរួចរាល់។", ttsEmpty: "សូមវាយអត្ថបទខ្មែរជាមុនសិន។", ttsChars: "តួអក្សរ",
 
   csChooseFile: "សូមជ្រើសរើសឯកសារជាមុនសិន។",   csUnavailable: "CloudShare មិនទាន់ត្រូវបានរៀបចំលើម៉ាស៊ីនបម្រើនេះទេ (ខ្វះមូលដ្ឋានទិន្នន័យ CloudShare)។",
+  settingsAppearance: "រូបរាង", settingsTheme: "ស្បែកអេក្រង់", settingsDark: "ងងឹត", settingsLight: "ភ្លឺ", settingsReduce: "កាត់បន្ថយចលនា", settingsReduceHint: "ចលនាតិចជាងមុន សមរម្យសម្រាប់ទូរស័ព្ទយឺត។",
+  settingsAccount: "គណនី", settingsPlan: "Token និងការបង់ប្រាក់", settingsGemini: "Gemini API key", settingsGeminiHint: "ប្រើសម្រាប់ឧបករណ៍សម្លេងឥតគិតថ្លៃ និង AI។ រក្សាទុកដោយអ៊ីនគ្រីបក្នុងគណនីរបស់អ្នក ពេលចូលគណនី។",
+  settingsData: "ទិន្នន័យលើឧបករណ៍នេះ", settingsDataHint: "កំណត់ភាសា ស្បែក និងចលនាឡើងវិញ។ គម្រោង និងគណនីរបស់អ្នកមិនប៉ះពាល់ទេ។", settingsReset: "កំណត់ឡើងវិញ", settingsDone: "បានកំណត់ឡើងវិញ។",
+  settingsLogin: "សូមចូលគណនី ដើម្បីមើលគណនីរបស់អ្នក។", settingsRole: "តួនាទី", settingsTokens: "Token", settingsTopUp: "បញ្ចូល Token", settingsProfile: "កែប្រូហ្វាល់", settingsLogout: "ចាកចេញ", settingsLangHint: "ផ្លាស់ប្តូរទាំងគេហទំព័រ។",
+  csHow: "របៀបប្រើ", csStep1: "ផ្ទុកឡើង", csStep1d: "ជ្រើសរើស ឬទម្លាក់ឯកសារ។", csStep2: "កំណត់ពេលផុតកំណត់", csStep2d: "តំណអាចឈប់ដំណើរការបន្ទាប់ពី ១ ម៉ោង ១ ថ្ងៃ ឬ ៧ ថ្ងៃ។", csStep3: "ចែករំលែកតំណ", csStep3d: "អ្នកមានតំណអាចទាញយកបាន។", csPriceNote: "ការផ្ទុកឡើងគិត {n} token ក្នុង ១ MB (បង្គត់ឡើង)។",
   csTitle: "Cloud Share", csSub: "ផ្ទុកឡើងឯកសារ ទទួលតំណ ហើយចែករំលែកគ្រប់ទីកន្លែង។", csDrop: "អូស & ទម្លាក់ឯកសារនៅទីនេះ", csOr: "ឬ", csBrowse: "ជ្រើសរើសឯកសារ",
   csExpires: "តំណផុតកំណត់", csNever: "មិនដែល", cs1h: "ក្នុង ១ ម៉ោង", cs1d: "ក្នុង ១ ថ្ងៃ", cs7d: "ក្នុង ៧ ថ្ងៃ", csMax: "ទំហំឯកសារអតិបរមា", csUpload: "ផ្ទុកឡើង",
   csUploading: "កំពុងផ្ទុកឡើង…", csCancel: "បោះបង់", csDone: "ផ្ទុកឡើងរួចរាល់", csYourLink: "តំណចែករំលែករបស់អ្នក", csCopy: "ចម្លងតំណ", csOpen: "បើកតំណ", csAnother: "ផ្ទុកឡើងឯកសារផ្សេងទៀត",

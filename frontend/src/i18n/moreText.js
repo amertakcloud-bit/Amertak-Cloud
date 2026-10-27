@@ -135,6 +135,7 @@ export const en = {
   veNoSpeech: "No speech was found in this clip.",
   veTaskTranslate: "Translating to Khmer…",
   veTaskVoice: "Creating Khmer voice…",
+  veRetrying: "retrying",
   veVoiceDone: "Done — {n} Khmer voice lines were added.",
   veEmptyProject: "Add something to the timeline first.",
   veNoRecorder: "This browser cannot record video. Use a recent Chrome, Edge or Firefox.",
@@ -210,6 +211,11 @@ export const en = {
   veSave_error: "Save failed",
   veTab_inspector: "Edit",
   veTab_media: "Media",
+  veTab_sticker: "Stickers",
+  veTab_audio: "Audio",
+  veStickerHint: "Tap an emoji to add it at the playhead.",
+  veAddAudio: "Add audio file",
+  veClose: "Close",
   veTab_ai: "AI",
 };
 export const km = {
@@ -348,6 +354,7 @@ export const km = {
   veNoSpeech: "រកមិនឃើញការនិយាយក្នុងឈុតនេះទេ។",
   veTaskTranslate: "កំពុងបកប្រែជាខ្មែរ…",
   veTaskVoice: "កំពុងបង្កើតសម្លេងខ្មែរ…",
+  veRetrying: "ព្យាយាមម្ដងទៀត",
   veVoiceDone: "រួចរាល់ — បានបន្ថែមសម្លេងខ្មែរ {n} ឃ្លា។",
   veEmptyProject: "សូមបន្ថែមអ្វីមួយទៅ timeline ជាមុនសិន។",
   veNoRecorder: "browser នេះមិនអាចថតវីដេអូបានទេ។ សូមប្រើ Chrome, Edge ឬ Firefox ថ្មី។",
@@ -423,5 +430,10 @@ export const km = {
   veSave_error: "រក្សាទុកមិនបាន",
   veTab_inspector: "កែ",
   veTab_media: "មេឌៀ",
+  veTab_sticker: "ស្ទីគ័រ",
+  veTab_audio: "សំឡេង",
+  veStickerHint: "ចុចលើរូបភាព ដើម្បីដាក់នៅកន្លែងបង្ហាញបច្ចុប្បន្ន។",
+  veAddAudio: "បន្ថែមឯកសារសំឡេង",
+  veClose: "បិទ",
   veTab_ai: "AI",
 };

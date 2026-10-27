@@ -189,246 +189,83 @@ export default function TextToSpeech() {
     document.body.removeChild(link);
   };
 
+  const quick = km
+    ? ["សួស្តី! សូមស្វាគមន៍មកកាន់ AmertakCloud។", "ថ្ងៃនេះអាកាសធាតុល្អណាស់។", "សូមអរគុណច្រើនចំពោះការគាំទ្ររបស់អ្នក។"]
+    : ["Hello! Welcome to AmertakCloud.", "The weather is lovely today.", "Thank you very much for your support."];
+  const canGo = !isGenerating && ownKey && text.trim().length > 0;
+
   return (
-    <div>
-      <div
-        style={{
-          maxWidth: 760,
-          margin: "0 auto",
-          padding: "28px 24px 20px",
-          borderRadius: 24,
-          background: "var(--bg)",
-          border: "1px solid var(--border)",
-          boxShadow: "0 20px 60px rgba(15, 23, 42, 0.08)",
-        }}
-      >
-        <h1
-          style={{
-            margin: 0,
-            fontSize: "2.4rem",
-            fontWeight: 800,
-            letterSpacing: "-0.04em",
-            color: "var(--text)",
-          }}
-        >
-          Khmer AI <span style={{ color: "var(--primary)" }}>Voice</span>
-        </h1>
+    <div className="page tts-page">
+      <header className="tts-head">
+        <span className="tts-badge"><i className="ri-voice-ai-line" aria-hidden="true" /></span>
+        <div>
+          <h1 className="tts-title">Khmer AI <span>Voice</span></h1>
+          <p className="tts-sub">{km ? "បម្លែងអត្ថបទទៅជាសម្លេង AI ពិត ដោយឥតគិតថ្លៃ — ប្រើ Gemini API key របស់អ្នកផ្ទាល់ (មិនកាត់ token)។" : "Turn text into natural AI speech — free, using your own Gemini API key (no tokens charged)."}</p>
+        </div>
+      </header>
 
-        <GeminiKeyPanel status={toolsStatus} access={panelAccess} />
-        <p className="tk-hint" style={{ margin: "6px 0 12px" }}>{km ? "ឧបករណ៍នេះឥតគិតថ្លៃ ប្រើ Gemini API key ផ្ទាល់ខ្លួនរបស់អ្នក (មិនកាត់ token)។" : "This tool is free — it uses your own Gemini API key (no tokens are charged)."}</p>
-        <form onSubmit={handleGenerate} style={{ display: "grid", gap: 18 }}>
-          <div>
-            <div style={{ marginBottom: 8, fontWeight: 600, color: "var(--text-muted)", fontFamily: 'Kantumruy' }}>បញ្ចូលអត្ថបទ</div>
-            <textarea
-              value={text}
-              maxLength={3000}
-              onChange={(event) => setText(event.target.value)}
-              rows={7}
-              placeholder="វាយបញ្ចូលអត្ថបទ..."
-              style={{
-                width: "100%",
-                padding: "1rem 1rem 0.8rem",
-                borderRadius: 16,
-                border: "1px solid var(--border)",
-                background: "var(--bg)",
-                resize: "vertical",
-                minHeight: 160,
-                fontSize: 16,
-                color: "var(--text)",
-                outline: "none",
-                WebkitTapHighlightColor: "",
-                boxShadow: "inset 0 1px 2px rgba(15,23,42,0.04)",
-              }}
-            />
-            <div style={{ marginTop: 8, textAlign: "right", color: "var(--text-muted)", fontSize: 13 }}>
-              {text.length} / 3000 {t("ttsChars")}
+      <GeminiKeyPanel status={toolsStatus} access={panelAccess} />
+
+      <form className="tts-grid" onSubmit={handleGenerate}>
+        <section className="tts-card tts-main">
+          <label className="tts-label" htmlFor="tts-text"><i className="ri-edit-2-line" aria-hidden="true" /> {km ? "បញ្ចូលអត្ថបទ" : "Your text"}</label>
+          <textarea id="tts-text" className="tts-text" value={text} maxLength={3000} onChange={(e) => setText(e.target.value)} rows={8} placeholder={km ? "វាយបញ្ចូលអត្ថបទ..." : "Type or paste your text…"} />
+          <div className="tts-meta">
+            <div className="tts-quick">
+              {quick.map((q) => <button key={q} type="button" className="tts-chip" onClick={() => setText(q)}>{q.length > 28 ? q.slice(0, 28) + "…" : q}</button>)}
             </div>
+            <span className="tts-count">{text.length} / 3000 {t("ttsChars")}</span>
           </div>
+        </section>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
-            <div>
-              <div style={{ marginBottom: 8, fontWeight: 600, color: "var(--text-muted)", fontFamily: 'Kantumruy' }}>
-                <i className="ri-mic-ai-line"></i>
-                <span> ប្រភេទសម្លេង</span>
-              </div>
-
-              <Select value={voice} onChange={(e) => setVoice(e.target.value)} aria-label="Voice">
-                {voices.map((v) => (
-                  <option key={v.value} value={v.value}>{v.label} · {v.gender === "Female" ? (km ? "ស្រី" : "Female") : (km ? "ប្រុស" : "Male")}</option>
-                ))}
-              </Select>
-            </div>
-
-            <div style={{display: 'none'}}>
-              <div style={{ marginBottom: 8, fontWeight: 600, color: "var(--text-muted)" }}>ភាសា</div>
-              <select
-                value="Khmer Cambodia"
-                disabled
-                style={{
-                  width: "100%",
-                  padding: "0.9rem 1rem",
-                  borderRadius: 12,
-                  border: "1px solid var(--border)",
-                  background: "var(--bg)",
-                  color: "var(--text-muted)",
-                }}
-              >
-                <option>🇰🇭 Khmer Cambodia</option>
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <div style={{ marginBottom: 8, fontWeight: 600, color: "var(--text-muted)", fontFamily: 'Kantumruy'}}>
-              <i className="ri-emotion-line"></i>
-              <span> {km ? "រចនាប័ទ្មសម្លេង" : "Voice style"}</span>
-            </div>
-            <Select value={style} onChange={(e) => setStyle(e.target.value)} aria-label="Style">
-              {Object.entries(STYLE_LABELS).map(([k, [en, kh]]) => <option key={k} value={k}>{km ? kh : en}</option>)}
-            </Select>
-          </div>
-
-          <div>
-            <div style={{ marginBottom: 8, fontWeight: 600, color: "var(--text-muted)", fontFamily: 'Kantumruy'}}>
-              <i className="ri-speed-up-line"></i>
-              <span> {km ? "ល្បឿនចាក់" : "Playback speed"}</span>
-            </div>
-            <div className="speed-option" style={{ display: "flex", gap: 8 }}>
-              {SPEED_OPTIONS.map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => setSpeed(option)}
-                  style={{
-                    border: "1px solid rgba(220, 36, 100, 0)",
-                    background: speed === option ? "var(--bg)" : "var(--text)",
-                    color: speed === option ? "var(--text)" : "var(--bg)",
-                    borderRadius: 7,
-                    padding: "0.6rem 0.9rem",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    minWidth: 64,
-                  }}
-                >
-                  {option}×
+        <aside className="tts-card tts-side">
+          <div className="tts-field">
+            <span className="tts-label"><i className="ri-mic-ai-line" aria-hidden="true" /> {km ? "ប្រភេទសម្លេង" : "Voice"}</span>
+            <div className="tts-voices" role="radiogroup" aria-label="Voice">
+              {voices.map((v) => (
+                <button key={v.value} type="button" role="radio" aria-checked={voice === v.value} className={`tts-voice ${voice === v.value ? "on" : ""}`} onClick={() => setVoice(v.value)}>
+                  <i className={v.gender === "Female" ? "ri-women-line" : "ri-men-line"} aria-hidden="true" />
+                  <b>{v.label}</b><small>{v.gender === "Female" ? (km ? "ស្រី" : "Female") : (km ? "ប្រុស" : "Male")}</small>
                 </button>
               ))}
             </div>
           </div>
 
-          <button
-            type="submit"
-            disabled={isGenerating || !ownKey}
-            style={{
-              border: "none",
-              background: "var(--text)",
-              color: "var(--bg)",
-              borderRadius: 10,
-              display: 'flex',
-              flexBasis: '100%',
-              alignItems: "center",
-              margin: '0 auto',
-              padding: "0.3rem",
-              fontWeight: 700,
-              gap: '.5rem',
-              cursor: isGenerating ? "not-allowed" : "pointer",
-              opacity: isGenerating ? 0.75 : 1,
-              boxShadow: "0 14px 30px rgba(134, 36, 220, 0.25)",
-            }}
-          >
-            <i className="ri-voice-ai-line"
-              style={{
-                color: 'var(--text)',
-                background: 'var(--bg)',
-                padding: '.8rem',
-                borderRadius: 7
-              }}
-            ></i>
-            <span>{isGenerating ? "កំពុងបង្កើត…" : "Generate Voice"}</span>
-          </button>
+          <div className="tts-field">
+            <span className="tts-label"><i className="ri-emotion-line" aria-hidden="true" /> {km ? "រចនាប័ទ្មសម្លេង" : "Style"}</span>
+            <Select value={style} onChange={(e) => setStyle(e.target.value)}>
+              {Object.entries(STYLE_LABELS).map(([k, [en, kh]]) => <option key={k} value={k}>{km ? kh : en}</option>)}
+            </Select>
+          </div>
 
-        </form>
-
-        {audioUrl && (
-          <div
-            style={{
-              marginTop: 24,
-              padding: 16,
-              borderRadius: 18,
-              background: "var(--bg)",
-              border: "1px solid var(--border)",
-            }}
-          >
-            <div ref={waveformRef} style={{ width: "100%", minHeight: 80, marginBottom: 12 }} />
-
-            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-              <button
-                type="button"
-                onClick={handlePlayPause}
-                disabled={!isReady}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: ".5rem",
-                  border: "none",
-                  borderRadius: 10,
-                  background: "var(--text)",
-                  color: "var(--bg)",
-                  padding: ".3rem",
-                  cursor: isReady ? "pointer" : "not-allowed",
-                  opacity: isReady ? 1 : 0.45,
-                }}
-              > 
-                <i className={isPlaying ? "ri-pause-fill" : "ri-play-fill"}
-                  style={{
-                    background: "var(--bg)",
-                    color: "var(--text)",
-                    padding: 10,
-                    borderRadius: 7,
-                  }}
-                ></i>
-                <span>{isPlaying ? "Pause" : "Play"}</span>
-              </button>
-
-              <span style={{ color: "var(--text-muted)", fontSize: 13 }}>
-                {formatTime(currentTime)} / {formatTime(duration)}
-              </span>
-
-              <input
-                type="range"
-                min={0}
-                max={duration || 0}
-                step={0.01}
-                value={currentTime}
-                onChange={handleSeek}
-                disabled={!isReady}
-                style={{ flex: 1, accentColor: "#dc2464", minWidth: 120 }}
-              />
-
-              <button
-                type="button"
-                onClick={handleDownload}
-                style={{
-                  border: "1px solid var(--border)",
-                  background: "var(--primary)",
-                  color: "var(--text)",
-                  borderRadius: 10,
-                  padding: ".3rem",
-                  cursor: "pointer",
-                  fontWeight: 700,
-                }}
-              >
-                <i className="ri-download-line"
-                  style={{
-                    background: "var(--bg)"
-                  }}
-                ></i>
-                <span>Download</span>
-              </button>
+          <div className="tts-field">
+            <span className="tts-label"><i className="ri-speed-up-line" aria-hidden="true" /> {km ? "ល្បឿនចាក់" : "Playback speed"}</span>
+            <div className="tts-seg" role="radiogroup" aria-label="Speed">
+              {SPEED_OPTIONS.map((o) => <button key={o} type="button" role="radio" aria-checked={speed === o} className={speed === o ? "on" : ""} onClick={() => setSpeed(o)}>{o}×</button>)}
             </div>
           </div>
-        )}
-      </div>
+
+          <button type="submit" className="tts-go" disabled={!canGo}>
+            <i className={isGenerating ? "ri-loader-4-line tts-spin" : "ri-voice-ai-line"} aria-hidden="true" />
+            <span>{isGenerating ? (km ? "កំពុងបង្កើត…" : "Generating…") : (km ? "បង្កើតសម្លេង" : "Generate voice")}</span>
+          </button>
+          {!ownKey && <p className="tts-warn"><i className="ri-key-2-line" aria-hidden="true" /> {t("keyRequired")}</p>}
+        </aside>
+      </form>
+
+      {audioUrl && (
+        <section className="tts-card tts-player" aria-label="Player">
+          <div ref={waveformRef} className="tts-wave" />
+          <div className="tts-ctl">
+            <button type="button" className="tts-play" onClick={handlePlayPause} disabled={!isReady} aria-label={isPlaying ? "Pause" : "Play"}>
+              <i className={isPlaying ? "ri-pause-fill" : "ri-play-fill"} aria-hidden="true" />
+            </button>
+            <span className="tts-time">{formatTime(currentTime)} / {formatTime(duration)}</span>
+            <input className="tts-seek" type="range" min={0} max={duration || 0} step={0.01} value={currentTime} onChange={handleSeek} disabled={!isReady} aria-label="Seek" />
+            <button type="button" className="tts-dl" onClick={handleDownload}><i className="ri-download-line" aria-hidden="true" /><span>{km ? "ទាញយក" : "Download"}</span></button>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

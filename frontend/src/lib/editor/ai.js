@@ -62,10 +62,10 @@ export async function speedUpBlob(blob, factor) {
 
 // 3) Khmer voice for one cue (Gemini TTS, paid through `job`): one request; if the speech is longer than its
 // slot it is sped up locally (max 1.5×) — free, no second generation.
-export async function voiceForCue({ text, voice, slot, signal, job }) {
-  const res = await withRetry(() => toolsApi.tts({ text, voice: legacyVoice(voice), style: "natural" }, signal, { job }), { signal });
+export async function voiceForCue({ text, voice, slot, signal, job, onRetry }) {
+  const res = await withRetry(() => toolsApi.tts({ text, voice: legacyVoice(voice), style: "natural" }, signal, { job }), { signal, retries: 3, baseMs: 1500, onRetry });
   let blob = res.blob;
-  let dur = await audioDuration(blob);
+  let dur = await Promise.race([audioDuration(blob), new Promise((_, rej) => setTimeout(() => rej(new ApiError("Could not read the generated audio.", { code: "BAD_AUDIO" })), 15000))]);
   let rate = 0;
   const factor = slot > 0 && dur > slot * 1.02 ? Math.min(1.5, dur / slot) : 1;
   if (factor > 1.02) {

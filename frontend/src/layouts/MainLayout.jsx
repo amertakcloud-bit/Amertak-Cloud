@@ -84,6 +84,13 @@ function MainLayout() {
     }
   }, [theme]);
 
+  // The Settings page changes the theme through this event so the header icon stays in sync.
+  useEffect(() => {
+    const on = (e) => { if (e.detail === "dark" || e.detail === "light") setTheme(e.detail); };
+    window.addEventListener("amertak:theme", on);
+    return () => window.removeEventListener("amertak:theme", on);
+  }, []);
+
   function toggleTheme() {
     setTheme((prev) => (prev === "dark" ? "light" : "dark"));
   }

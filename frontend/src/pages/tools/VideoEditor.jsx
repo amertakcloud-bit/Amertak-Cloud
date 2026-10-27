@@ -38,6 +38,7 @@ const PRESETS = [
 
 const AI_EDIT_COST = 1; // tokens per AI instruction (server refunds on failure)
 
+const ratioLabel = (w, h) => { const g = (a, b) => (b ? g(b, a % b) : a); const d = g(w, h) || 1; const a = w / d, b = h / d; return a > 30 || b > 30 ? `${(w / h).toFixed(2)}:1` : `${a}:${b}`; };
 function useNarrow(px = 900) {
   const q = `(max-width:${px}px)`;
   const [n, setN] = useState(() => typeof window !== "undefined" && window.matchMedia?.(q).matches);
@@ -183,6 +184,9 @@ function Workspace({ id }) {
   const [playing, setPlaying] = useState(false);
   const [zoom, setZoom] = useState(60);
   const [tab, setTab] = useState("media");
+  const [sheet, setSheet] = useState(false); // phone layout: the tool panel is a bottom sheet
+  const goTab = (k) => { setTab(k); setSheet(true); };
+  const railTab = (k) => { if (narrow && sheet && tab === k) setSheet(false); else goTab(k); };
   const [aiHistory, setAiHistory] = useState([]);
   const [aiBusy, setAiBusy] = useState(false);
   const narrow = useNarrow();
@@ -335,7 +339,14 @@ function Workspace({ id }) {
   function addText() {
     const c = makeTextClip({ text: t("veSampleText"), start: timeRef.current });
     edit((p) => addClip(p, c));
-    setSelected(c.id); setTab("inspector");
+    setSelected(c.id); goTab("inspector");
+  }
+  const STICKERS = ["😀","😂","🥰","😍","😎","🤩","😭","😡","👍","👏","🙏","💪","🔥","⭐","❤️","💯","🎉","🎁","✨","👀","🐱","🐶","🌸","🍀","➡️","⬆️","✅","❌","📍","🔔","🎵","💰"];
+  function addSticker(e) {
+    const c = makeTextClip({ text: e, start: timeRef.current, dur: 3, style: { size: 16, outline: false, shadow: false, bg: "rgba(0,0,0,0)" } });
+    edit((p) => addClip(p, c));
+    setSelected(c.id);
+    if (!narrow) setTab("inspector");
   }
   async function importSrt(file) {
     if (!file) return;
@@ -376,7 +387,7 @@ function Workspace({ id }) {
     const c = makeTextClip({ text: preset.key === "vePresetHeading" ? t("veSampleTitle") : t("veSampleText"), start: timeRef.current, style: preset.style });
     edit((p) => addClip(p, c));
     setSelected(c.id);
-    if (narrow) setTab("inspector");
+    goTab("inspector");
   }
   const onTextEdit = useCallback((clipId, value) => edit((p) => updateClip(p, clipId, { text: value })), [edit]);
   const applyPreset = (preset) => edit((p) => applyCaptionPreset(p, preset));
@@ -544,9 +555,9 @@ function Workspace({ id }) {
         edit((p) => ({ ...p, captionStyle: hlStyle(p), clips: [...p.clips.filter((c) => !(c.type === "caption" && c.source === src.id)), ...caps.map((c) => ({ ...c, style: hlStyle(p) }))] }));
         let done = 0;
         await pool(caps, 2, async (c, i) => {
-          results[i] = await voiceForCue({ text: c.text, voice: names[i], slot: c.dur, signal, job: started.job });
+          results[i] = await voiceForCue({ text: c.text, voice: names[i], slot: c.dur, signal, job: started.job, onRetry: (n) => progress(56 + (done / caps.length) * 42, `${t("veTaskVoice")} ${done}/${caps.length} · ${t("veRetrying")} (${n})`) });
           done += 1;
-          progress(56 + (done / caps.length) * 42);
+          progress(56 + (done / caps.length) * 42, `${t("veTaskVoice")} ${done}/${caps.length}`);
         }, signal);
         voiced = true;
       } finally {
@@ -693,12 +704,24 @@ function Workspace({ id }) {
   const TABS = [
     ["media", "ri-folder-video-line", "veTab_media"],
     ["text", "ri-text", "veTab_text"],
+    ["sticker", "ri-emotion-happy-line", "veTab_sticker"],
+    ["audio", "ri-music-2-line", "veTab_audio"],
     ["ai", "ri-sparkling-2-line", "veTab_ai"],
     ...(narrow ? [["inspector", "ri-equalizer-line", "veTab_inspector"]] : []),
   ];
   const activeTab = !narrow && tab === "inspector" ? "media" : tab;
   const fileInput = (props, cls, children) => (
     <label className={cls}>{children}<input type="file" hidden {...props} /></label>
+  );
+
+  const railNav = (
+    <nav className="ve-rail" role="tablist" aria-label="Editor tools">
+            {TABS.map(([k, ic, lb]) => (
+              <button key={k} role="tab" aria-selected={activeTab === k} type="button" className={activeTab === k ? "on" : ""} onClick={() => railTab(k)}>
+                <i className={ic} /><span>{t(lb)}</span>
+              </button>
+            ))}
+          </nav>
   );
 
   return (
@@ -708,22 +731,43 @@ function Workspace({ id }) {
         <input className="ve-name" value={name} maxLength={120} onChange={(e) => { setName(e.target.value); setSave("dirty"); }} aria-label={t("veProjectName")} />
         <span className={`ve-save ${save}`} role="status">{t(`veSave_${save}`)}</span>
         <span className="ve-spacer" />
-        <button type="button" className="ve-ibtn" onClick={undo} disabled={!past.current.length} aria-label={t("veUndo")} title={`${t("veUndo")} (Ctrl+Z)`}><i className="ri-arrow-go-back-line" /></button>
-        <button type="button" className="ve-ibtn" onClick={redo} disabled={!future.current.length} aria-label={t("veRedo")} title={`${t("veRedo")} (Ctrl+Y)`}><i className="ri-arrow-go-forward-line" /></button>
+        {!narrow && <button type="button" className="ve-ibtn" onClick={undo} disabled={!past.current.length} aria-label={t("veUndo")} title={`${t("veUndo")} (Ctrl+Z)`}><i className="ri-arrow-go-back-line" /></button>}
+        {!narrow && <button type="button" className="ve-ibtn" onClick={redo} disabled={!future.current.length} aria-label={t("veRedo")} title={`${t("veRedo")} (Ctrl+Y)`}><i className="ri-arrow-go-forward-line" /></button>}
         <button type="button" className="ve-ibtn" onClick={saveNow} disabled={busy} aria-label={t("veSave")} title={t("veSave")}><i className="ri-save-3-line" /></button>
-        <button type="button" className="tk-btn small" onClick={exportVideo} disabled={busy}><i className="ri-download-2-line" /><span className="ve-lbl">{t("veExport")}</span></button>
+        <button type="button" className="tk-btn small ve-export" onClick={exportVideo} disabled={busy}><i className="ri-download-2-line" /><span className="ve-lbl">{t("veExport")}</span></button>
       </header>
 
+      {narrow && sheet && <div className="ve-sheet-bg" onClick={() => setSheet(false)} />}
       <div className="ve-main">
-        <aside className="ve-left">
-          <nav className="ve-rail" role="tablist" aria-label="Editor tools">
-            {TABS.map(([k, ic, lb]) => (
-              <button key={k} role="tab" aria-selected={activeTab === k} type="button" className={activeTab === k ? "on" : ""} onClick={() => setTab(k)}>
-                <i className={ic} /><span>{t(lb)}</span>
-              </button>
-            ))}
-          </nav>
+        <aside className={`ve-left ${sheet ? "open" : ""}`}>
+          {!narrow && railNav}
           <div className="ve-panel">
+            {narrow && <button type="button" className="ve-sheet-x" onClick={() => setSheet(false)} aria-label={t("veClose")}><i className="ri-arrow-down-s-line" /></button>}
+            {activeTab === "sticker" && (
+              <div className="ve-stickers">
+                <p className="tk-hint">{t("veStickerHint")}</p>
+                <div className="ve-emoji">{STICKERS.map((e) => <button key={e} type="button" onClick={() => addSticker(e)} aria-label={e}>{e}</button>)}</div>
+              </div>
+            )}
+
+            {activeTab === "audio" && (
+              <div className="ve-media">
+                {fileInput({ multiple: true, accept: "audio/*", onChange: (e) => { importFiles(e.target.files); e.target.value = ""; } }, "tk-btn full ve-file", <><i className="ri-music-2-line" />{t("veAddAudio")}</>)}
+                {mediaList.filter((m) => m.kind === "audio").map((m) => (
+                  <div key={m.id} className="ve-mitem">
+                    <i className={m.source === "extracted" ? "ri-voiceprint-line" : "ri-music-2-line"} />
+                    <span className="ve-mname" title={m.name}>{m.name}</span>
+                    <button type="button" className="tk-btn ghost small" onClick={() => addMediaAtPlayhead(m)} aria-label={t("veAddToTimeline")}><i className="ri-add-line" /></button>
+                  </div>
+                ))}
+                <section className="ve-sec">
+                  <h4><i className="ri-tools-line" /> {t("veMediaTools")}</h4>
+                  <button type="button" className="tk-btn ghost full" disabled={busy || !source} onClick={extractAudioTool}><i className="ri-voiceprint-line" />{t("veExtractAudio")} <small>({t("free")})</small></button>
+                  <button type="button" className="tk-btn ghost full" disabled={busy || !source} onClick={removeSilence}><i className="ri-scissors-cut-line" />{t("veRemoveSilence")} <small>({t("free")})</small></button>
+                </section>
+              </div>
+            )}
+
             {activeTab === "media" && (
               <div className="ve-media">
                 {fileInput({ multiple: true, accept: "video/*,audio/*,image/*", onChange: (e) => { importFiles(e.target.files); e.target.value = ""; } }, "tk-btn full ve-file", <><i className="ri-add-line" />{t("veAddMedia")}</>)}
@@ -793,13 +837,16 @@ function Workspace({ id }) {
             </div>
           </div>
           <div className="ve-transport">
-            <button type="button" className="ve-ibtn" onClick={() => engine.current?.seek(0)} aria-label={t("veToStart")} title={t("veToStart")}><i className="ri-skip-back-fill" /></button>
-            <button type="button" className="ve-ibtn" onClick={() => engine.current?.seek(Math.max(0, timeRef.current - 5))} aria-label={t("veSkipBack")} title={t("veSkipBack")}><i className="ri-replay-5-line" /></button>
+            {narrow && <button type="button" className="ve-ibtn" onClick={undo} disabled={!past.current.length} aria-label={t("veUndo")}><i className="ri-arrow-go-back-line" /></button>}
+            {narrow && <button type="button" className="ve-ibtn" onClick={redo} disabled={!future.current.length} aria-label={t("veRedo")}><i className="ri-arrow-go-forward-line" /></button>}
+            <button type="button" className="ve-ibtn ve-desk" onClick={() => engine.current?.seek(0)} aria-label={t("veToStart")} title={t("veToStart")}><i className="ri-skip-back-fill" /></button>
+            <button type="button" className="ve-ibtn ve-desk" onClick={() => engine.current?.seek(Math.max(0, timeRef.current - 5))} aria-label={t("veSkipBack")} title={t("veSkipBack")}><i className="ri-replay-5-line" /></button>
             <button type="button" className="ve-play" onClick={() => engine.current?.toggle()} disabled={busy || !duration} aria-label={playing ? t("vePause") : t("vePlay")}>
               <i className={playing ? "ri-pause-fill" : "ri-play-fill"} />
             </button>
-            <button type="button" className="ve-ibtn" onClick={() => engine.current?.seek(Math.min(duration, timeRef.current + 5))} aria-label={t("veSkipFwd")} title={t("veSkipFwd")}><i className="ri-forward-5-line" /></button>
-            <span className="ve-time">{fmtT(time)} / {fmtT(duration)}</span>
+            <button type="button" className="ve-ibtn ve-desk" onClick={() => engine.current?.seek(Math.min(duration, timeRef.current + 5))} aria-label={t("veSkipFwd")} title={t("veSkipFwd")}><i className="ri-forward-5-line" /></button>
+            <span className="ve-time"><b>{fmtT(time)}</b> / {fmtT(duration)}</span>
+            <span className="ve-ratio">{ratioLabel(project.width, project.height)}</span>
             <button type="button" className="ve-splitbtn" onClick={split} disabled={busy || !duration} title={`${t("veSplit")} (S)`}><i className="ri-scissors-cut-line" /><span>{t("veSplitHere")}</span></button>
           </div>
           <input type="range" className="ve-scrub" min="0" max={Math.max(0.1, duration)} step="0.05" value={Math.min(time, Math.max(0.1, duration))}
@@ -811,12 +858,13 @@ function Workspace({ id }) {
 
       <div className="ve-bottom">
         <div className="ve-tools">
+          {narrow && <button type="button" className="ve-tool" onClick={() => goTab("inspector")} disabled={!selected}><i className="ri-edit-2-line" /><span>{t("veTab_inspector")}</span></button>}
           <button type="button" className="ve-tool" onClick={split} title={`${t("veSplit")} (S)`}><i className="ri-scissors-cut-line" /><span>{t("veSplit")}</span></button>
           <button type="button" className="ve-tool" onClick={trimLeft} disabled={!canTrim} title={`${t("veTrimLeft")} (Q)`}><i className="ri-skip-left-line" /><span>{t("veTrimLeft")}</span></button>
           <button type="button" className="ve-tool" onClick={trimRight} disabled={!canTrim} title={`${t("veTrimRight")} (W)`}><i className="ri-skip-right-line" /><span>{t("veTrimRight")}</span></button>
           <span className="ve-sep" />
           <button type="button" className="ve-tool" onClick={dup} disabled={!selected} title={`${t("veDuplicate")} (Ctrl+D)`}><i className="ri-file-copy-line" /><span>{t("veDuplicate")}</span></button>
-          <button type="button" className="ve-tool" onClick={del} disabled={!selected} title={`${t("delete")} (Del)`}><i className="ri-delete-bin-line" /><span>{t("delete")}</span></button>
+          <button type="button" className="ve-tool danger" onClick={del} disabled={!selected} title={`${t("delete")} (Del)`}><i className="ri-delete-bin-line" /><span>{t("delete")}</span></button>
           <button type="button" className="ve-tool" onClick={rippleDel} disabled={!selected} title={`${t("veRippleDelete")} (Shift+Del)`}><i className="ri-eraser-line" /><span>{t("veRippleDelete")}</span></button>
           <span className="ve-spacer" />
           <i className="ri-zoom-out-line" aria-hidden="true" />
@@ -826,6 +874,8 @@ function Workspace({ id }) {
         <Timeline project={project} time={time} zoom={zoom} selected={selected} t={t}
           onSelect={setSelected} onSeek={(s) => engine.current?.seek(s)} onPreview={onPreview} onCommit={onCommit} getBlob={getBlob} />
       </div>
+
+      {narrow && <div className="ve-botnav">{railNav}</div>}
 
       {task && (
         <div className="ve-task" role="status" aria-live="polite">
