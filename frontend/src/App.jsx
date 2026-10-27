@@ -319,6 +319,14 @@ function App() {
             }
           />
           <Route
+            path="/admin/payments"
+            element={<motion.div {...getPageAnimation(location, prev)} key="admin-payments"><AdminDashboard /></motion.div>}
+          />
+          <Route
+            path="/admin/audit"
+            element={<motion.div {...getPageAnimation(location, prev)} key="admin-audit"><AdminDashboard /></motion.div>}
+          />
+          <Route
             path="/admin/promo-codes"
             element={
               <motion.div

@@ -1,4 +1,5 @@
 import { useState, useEffect, Suspense } from "react";
+import { isStaff } from "../lib/permissions";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
@@ -28,7 +29,7 @@ function AdminLayout() {
   });
 
   useEffect(() => {
-    if (!authLoading && (!user || user.role !== "admin")) {
+    if (!authLoading && (!user || !isStaff(user))) {
       navigate("/admin/login", { replace: true });
     }
   }, [authLoading, user, navigate]);
@@ -51,7 +52,7 @@ function AdminLayout() {
     );
   }
 
-  if (!user || user.role !== "admin") {
+  if (!user || !isStaff(user)) {
     return null;
   }
 

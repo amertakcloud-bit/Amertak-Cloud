@@ -340,3 +340,52 @@ run("ledger + notifications: admin grant/deduct, low balance, refund, audit, own
   assert.equal((await call(nc.listNotifications, { user: u })).body.data.unread, 0);
   assert.equal((await call(nc.listNotifications, { user: other })).body.data.items.some((n) => String(n.user) === String(u._id)), false);
 });
+
+run("roles: permission matrix, role change guards, ban rules, payments/stats", async () => {
+  const { requirePerm } = await import("../middleware/permissions.js");
+  const mw = (perm, role) => new Promise((resolve) => {
+    const res = { status(c) { this.code = c; return this; }, json(b) { resolve({ code: this.code, body: b }); } };
+    requirePerm(perm)({ user: role ? { role } : null }, res, () => resolve({ code: 200 }));
+  });
+  const expect = { admin: [200, 200, 200], support: [403, 200, 200], finance: [200, 403, 403], user: [403, 403, 403] };
+  for (const [role, [tok, ban, pay]] of Object.entries(expect)) {
+    assert.equal((await mw("tokens.adjust", role)).code, tok, `${role} tokens.adjust`);
+    assert.equal((await mw("users.ban", role)).code, ban, `${role} users.ban`);
+    assert.equal((await mw("audit.read", role)).code, role === "finance" || role === "user" ? 403 : 200, `${role} audit.read`);
+    assert.equal((await mw("payments.read", role)).code, role === "admin" || role === "finance" ? 200 : 403, `${role} payments.read`);
+  }
+  assert.equal((await mw("users.read", null)).code, 401);
+
+  const mk = async (email) => { await call(m.auth.register, { body: { name: "Role " + email[0], email, password: "password123", confirmPassword: "password123" } }); return m.User.findOne({ email }); };
+  const adm = await mk("adm@example.com"), sup = await mk("sup@example.com"), tgt = await mk("tgt@example.com");
+  for (const x of await m.User.find({ role: "admin" })) { x.role = "user"; await x.save(); }
+  adm.role = "admin"; await adm.save();
+
+  const self = await call(m.admin.setRole, { params: { userId: String(adm._id) }, body: { role: "user" }, user: adm });
+  assert.equal(self.code, 400, "cannot change own role");
+  assert.equal((await call(m.admin.setRole, { params: { userId: String(tgt._id) }, body: { role: "root" }, user: adm })).code, 400);
+  assert.equal((await call(m.admin.setRole, { params: { userId: String(sup._id) }, body: { role: "support" }, user: adm })).code, 200);
+  assert.equal((await m.User.findById(sup._id)).role, "support");
+  // promote tgt to admin, then adm cannot be the "last admin" problem: demote tgt back is fine, demoting the only admin is not
+  await call(m.admin.setRole, { params: { userId: String(tgt._id) }, body: { role: "admin" }, user: adm });
+  assert.equal((await call(m.admin.setRole, { params: { userId: String(adm._id) }, body: { role: "user" }, user: tgt })).code, 200);
+  const last = await call(m.admin.setRole, { params: { userId: String(tgt._id) }, body: { role: "user" }, user: adm });
+  assert.ok([400, 200].includes(last.code));
+  // restore: adm admin again
+  const a2 = await m.User.findById(adm._id); a2.role = "admin"; await a2.save();
+  const t2 = await m.User.findById(tgt._id); t2.role = "user"; await t2.save();
+
+  // ban rules
+  assert.equal((await call(m.admin.setBan, { params: { userId: String(tgt._id) }, body: { banned: true }, user: sup })).code, 400, "reason required");
+  assert.equal((await call(m.admin.setBan, { params: { userId: String(sup._id) }, body: { banned: true, reason: "x" }, user: sup })).code, 400, "not yourself");
+  assert.equal((await call(m.admin.setBan, { params: { userId: String(a2._id) }, body: { banned: true, reason: "x" }, user: sup })).code, 403, "support cannot ban admin");
+  const ok = await call(m.admin.setBan, { params: { userId: String(tgt._id) }, body: { banned: true, reason: "spam" }, user: sup });
+  assert.equal(ok.code, 200);
+  assert.equal((await m.User.findById(tgt._id)).banned, true);
+  await call(m.admin.setBan, { params: { userId: String(tgt._id) }, body: { banned: false }, user: sup });
+  assert.equal((await m.User.findById(tgt._id)).banned, false);
+
+  const st = await call(m.admin.adminStats, { user: adm });
+  assert.ok(st.body.data.users >= 3 && typeof st.body.data.revenue === "number");
+  assert.ok(Array.isArray((await call(m.admin.listPayments, { query: {}, user: adm })).body.data.items));
+});

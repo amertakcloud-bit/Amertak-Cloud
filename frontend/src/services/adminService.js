@@ -11,8 +11,16 @@ const adminService = {
   getUserDetail: (userId) => api.get(`/admin/users/${userId}`),
 
   // Tokens
-  addTokens: (userId, tokens) =>
-    api.post(`/admin/users/${userId}/tokens`, { tokens }),
+  addTokens: (userId, tokens, reason = "") =>
+    api.post(`/admin/users/${userId}/tokens`, { tokens, reason }),
+  deductTokens: (userId, tokens, reason) =>
+    api.post(`/admin/users/${userId}/tokens/deduct`, { tokens, reason }),
+  getLedger: (userId) => api.get(`/admin/users/${userId}/ledger`),
+  setRole: (userId, role) => api.post(`/admin/users/${userId}/role`, { role }),
+  setBan: (userId, banned, reason = "") => api.post(`/admin/users/${userId}/ban`, { banned, reason }),
+  getPayments: (params) => api.get("/admin/payments", params),
+  getAudit: (params) => api.get("/admin/audit", params),
+  getStats: () => api.get("/admin/stats"),
 
   // Promo codes
   getPromoCodes: (params) => api.get("/admin/promo-codes", { params }),

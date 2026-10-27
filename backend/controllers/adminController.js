@@ -1,5 +1,6 @@
 import User from "../models/User.js";
-import { afterGrant, audit } from "../lib/ledger.js";
+import { ROLES, isStaff, permsFor } from "../lib/permissions.js";
+import { afterGrant, audit, notify } from "../lib/ledger.js";
 import AuditLog from "../models/AuditLog.js";
 import Ledger from "../models/Ledger.js";
 import Payment from "../models/Payment.js";
@@ -20,6 +21,8 @@ function toPublicUser(user) {
     avatar: user.avatar || "",
     provider: user.provider,
     role: user.role,
+    banned: Boolean(user.banned),
+    permissions: permsFor(user.role),
     tokens: user.tokens ?? 0,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
@@ -47,7 +50,7 @@ export const adminLogin = asyncHandler(async (req, res) => {
     });
   }
 
-  if (user.role !== "admin") {
+  if (!isStaff(user.role) || user.banned) {
     return res.status(403).json({
       success: false,
       message: "Account is not an admin.",
@@ -87,7 +90,9 @@ export const listUsers = asyncHandler(async (req, res) => {
   const pageNum = Math.max(1, parseInt(page, 10) || 1);
   const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
 
-  const filter = { role: "user" };
+  const filter = {};
+  if (["user", "support", "finance", "admin"].includes(req.query.role)) filter.role = req.query.role;
+  if (req.query.banned === "true") filter.banned = true;
   const q = String(search).trim();
   if (q) {
     filter.$or = [
@@ -98,7 +103,7 @@ export const listUsers = asyncHandler(async (req, res) => {
 
   const [users, total] = await Promise.all([
     User.find(filter)
-      .select("name email avatar tokens role createdAt updatedAt")
+      .select("name email avatar tokens role banned createdAt updatedAt")
       .sort({ createdAt: -1 })
       .skip((pageNum - 1) * limitNum)
       .limit(limitNum)
@@ -125,7 +130,7 @@ export const getUserDetail = asyncHandler(async (req, res) => {
   const { userId } = req.params;
 
   const user = await User.findById(userId).select(
-    "name email provider role tokens createdAt updatedAt"
+    "name email provider role banned bannedReason tokens createdAt updatedAt"
   );
 
   if (!user) {
@@ -523,3 +528,63 @@ export const deletePromoCode = asyncHandler(async (req, res) => {
   });
 });
 
+
+// ── Roles, bans, payments, stats ─────────────────────────────────────────────
+const sameId = (a, b) => String(a) === String(b);
+
+// POST /api/admin/users/:userId/role  { role }   (admin only; never yourself; never the last admin)
+export const setRole = asyncHandler(async (req, res) => {
+  const role = String(req.body?.role || "");
+  if (!ROLES.includes(role)) return res.status(400).json({ success: false, message: "Unknown role." });
+  const target = await User.findById(req.params.userId);
+  if (!target) return res.status(404).json({ success: false, message: "User not found." });
+  if (sameId(target._id, req.user._id)) return res.status(400).json({ success: false, message: "You cannot change your own role." });
+  if (target.role === "admin" && role !== "admin" && (await User.countDocuments({ role: "admin" })) <= 1) {
+    return res.status(400).json({ success: false, message: "There must be at least one admin." });
+  }
+  const before = target.role;
+  target.role = role;
+  await target.save();
+  await audit(req.user._id, "role.change", target._id, { from: before, to: role }, req.ip);
+  await notify(target._id, "role", "Your role changed", `You are now: ${role}.`);
+  return res.json({ success: true, data: { user: toPublicUser(target) } });
+});
+
+// POST /api/admin/users/:userId/ban  { banned: true|false, reason }
+export const setBan = asyncHandler(async (req, res) => {
+  const banned = req.body?.banned !== false;
+  const reason = String(req.body?.reason || "").trim().slice(0, 300);
+  if (banned && !reason) return res.status(400).json({ success: false, message: "A reason is required to suspend an account." });
+  const target = await User.findById(req.params.userId);
+  if (!target) return res.status(404).json({ success: false, message: "User not found." });
+  if (sameId(target._id, req.user._id)) return res.status(400).json({ success: false, message: "You cannot suspend yourself." });
+  if (target.role === "admin" && req.user.role !== "admin") return res.status(403).json({ success: false, code: "FORBIDDEN", message: "Only an admin can suspend an admin." });
+  target.banned = banned;
+  target.bannedReason = banned ? reason : "";
+  await target.save();
+  await audit(req.user._id, banned ? "user.ban" : "user.unban", target._id, { reason }, req.ip);
+  return res.json({ success: true, data: { user: toPublicUser(target) } });
+});
+
+// GET /api/admin/payments?page=&limit=&status=
+export const listPayments = asyncHandler(async (req, res) => {
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+  const filter = {};
+  if (["pending", "paid", "expired"].includes(req.query.status)) filter.status = req.query.status;
+  const [items, total] = await Promise.all([
+    Payment.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit),
+    Payment.countDocuments(filter),
+  ]);
+  return res.json({ success: true, data: { items, total, page, pages: Math.max(1, Math.ceil(total / limit)) } });
+});
+
+// GET /api/admin/stats
+export const adminStats = asyncHandler(async (_req, res) => {
+  const [users, banned, staff, paid] = await Promise.all([
+    User.countDocuments({}), User.countDocuments({ banned: true }),
+    User.countDocuments({ role: { $in: ["support", "finance", "admin"] } }),
+    Payment.find({ status: "paid" }),
+  ]);
+  return res.json({ success: true, data: { users, banned, staff, paidCount: paid.length, revenue: Math.round(paid.reduce((s, p) => s + (p.price || 0), 0) * 100) / 100, tokensSold: paid.reduce((s, p) => s + (p.tokens || 0), 0) } });
+});

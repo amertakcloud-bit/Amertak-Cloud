@@ -7,6 +7,10 @@ import {
   listUsers,
   getUserDetail,
   addTokens,
+  setRole,
+  setBan,
+  listPayments,
+  adminStats,
   deductTokens,
   listAudit,
   userLedger,
@@ -19,6 +23,7 @@ import {
 } from "../controllers/adminController.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { protectAdmin } from "../middleware/adminAuthMiddleware.js";
+import { requirePerm } from "../middleware/permissions.js";
 
 const router = Router();
 
@@ -41,20 +46,27 @@ router.get("/auth/me", protect, adminMe);
 
 // All other admin routes require a valid session AND the admin role
 const adminProtectedRouter = Router();
-adminProtectedRouter.use(protect, protectAdmin);
+adminProtectedRouter.use(protect);
 
-adminProtectedRouter.get("/users", listUsers);
-adminProtectedRouter.get("/users/:userId", getUserDetail);
-adminProtectedRouter.post("/users/:userId/tokens", addTokens);
-adminProtectedRouter.post("/users/:userId/tokens/deduct", deductTokens);
-adminProtectedRouter.get("/users/:userId/ledger", userLedger);
-adminProtectedRouter.get("/audit", listAudit);
-adminProtectedRouter.get("/promo-codes", listPromoCodes);
-adminProtectedRouter.post("/promo-codes", createPromoCode);
-adminProtectedRouter.delete("/promo-codes/:id", deletePromoCode);
-adminProtectedRouter.post("/promo-codes/:id/activate", activatePromoCode);
-adminProtectedRouter.post("/promo-codes/:id/deactivate", deactivatePromoCode);
-adminProtectedRouter.post("/promo-codes/:id/use", usePromoCode);
+// Each route names the permission it needs (lib/permissions.js): admin = everything,
+// support = read/suspend users + audit, finance = read users, adjust tokens, ledger, payments, stats.
+const admin = protectAdmin;
+adminProtectedRouter.get("/users", requirePerm("users.read"), listUsers);
+adminProtectedRouter.get("/users/:userId", requirePerm("users.read"), getUserDetail);
+adminProtectedRouter.post("/users/:userId/tokens", requirePerm("tokens.adjust"), addTokens);
+adminProtectedRouter.post("/users/:userId/tokens/deduct", requirePerm("tokens.adjust"), deductTokens);
+adminProtectedRouter.get("/users/:userId/ledger", requirePerm("ledger.read"), userLedger);
+adminProtectedRouter.post("/users/:userId/role", admin, setRole);
+adminProtectedRouter.post("/users/:userId/ban", requirePerm("users.ban"), setBan);
+adminProtectedRouter.get("/audit", requirePerm("audit.read"), listAudit);
+adminProtectedRouter.get("/payments", requirePerm("payments.read"), listPayments);
+adminProtectedRouter.get("/stats", requirePerm("stats.read"), adminStats);
+adminProtectedRouter.get("/promo-codes", admin, listPromoCodes);
+adminProtectedRouter.post("/promo-codes", admin, createPromoCode);
+adminProtectedRouter.delete("/promo-codes/:id", admin, deletePromoCode);
+adminProtectedRouter.post("/promo-codes/:id/activate", admin, activatePromoCode);
+adminProtectedRouter.post("/promo-codes/:id/deactivate", admin, deactivatePromoCode);
+adminProtectedRouter.post("/promo-codes/:id/use", admin, usePromoCode);
 
 router.use("/", adminProtectedRouter);
 

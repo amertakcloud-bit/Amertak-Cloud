@@ -1,4 +1,5 @@
 import sidebarItems from "../data/sidebarItems";
+import { can, isStaff } from "../lib/permissions";
 import sidebarSocail from "../data/sidebarSocails";
 import SidebarSocails from "./SidebarSocails";
 import SidebarItem from "./SidebarItem";
@@ -26,13 +27,15 @@ function Sidebar({ isOpen, onClose, isCollapsed }) {
       };
     }
 
-    if (user?.role === "admin" && item.labelKey === "dashboard") {
+    if (isStaff(user) && item.labelKey === "dashboard") {
       return {
         ...item,
         path: "/admin/dashboard",
         children: [
           { labelKey: "users", icon: "ri-group-line", path: "/admin/dashboard" },
-          { labelKey: "promoCodes", icon: "ri-ticket-price-line", path: "/admin/promo-codes" },
+          ...(can(user, "payments.read") ? [{ labelKey: "payments", icon: "ri-bank-card-line", path: "/admin/payments" }] : []),
+          ...(can(user, "audit.read") ? [{ labelKey: "auditLog", icon: "ri-file-list-3-line", path: "/admin/audit" }] : []),
+          ...(can(user, "*") ? [{ labelKey: "promoCodes", icon: "ri-ticket-price-line", path: "/admin/promo-codes" }] : []),
         ],
       };
     }

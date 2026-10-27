@@ -144,6 +144,9 @@ export const login = asyncHandler(async (req, res) => {
   }
 
   const isMatch = await user.matchPassword(password);
+  if (isMatch && user.banned) {
+    return res.status(403).json({ success: false, code: "ACCOUNT_BANNED", message: "This account is suspended." });
+  }
   if (!isMatch) {
     return res.status(401).json({
       success: false,

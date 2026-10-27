@@ -53,9 +53,11 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ["user", "admin"],
+      enum: ["user", "support", "finance", "admin"],
       default: "user",
     },
+    banned: { type: Boolean, default: false },
+    bannedReason: { type: String, default: "", maxlength: 300 },
     // The user's own Gemini API key, AES-256-GCM encrypted (never returned to the client).
     geminiKeyEnc: { type: String, default: "", select: false },
     // Token balance credited by successful plan payments.

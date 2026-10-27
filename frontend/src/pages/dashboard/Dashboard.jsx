@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { isStaff } from "../../lib/permissions";
 import { Skeleton, SkeletonChart, SkeletonRows } from "../../components/ui/Skeleton";
 import { Link, Navigate } from "react-router-dom";
 import { useLanguage } from "../../context/LanguageContext";
@@ -49,7 +50,7 @@ function Dashboard() {
   // Live data: loads once with skeletons, then refreshes silently every 45 s and when the tab regains focus
   // (so a balance change by an admin or a finished payment appears without a reload).
   useEffect(() => {
-    if (!user || user.role === "admin") return undefined;
+    if (!user || isStaff(user)) return undefined;
     let alive = true;
     const load = () => api.get("/users/dashboard", { days, tz: new Date().getTimezoneOffset() })
       .then((r) => { if (alive) { setData(r.data); setError(""); } })
@@ -64,7 +65,7 @@ function Dashboard() {
   const maxTool = useMemo(() => Math.max(1, ...(data?.byTool || []).map((x) => x.tokens)), [data]);
 
   if (!user) return <Navigate to="/login" replace />;
-  if (user.role === "admin") return <Navigate to="/admin/dashboard" replace />;
+  if (isStaff(user)) return <Navigate to="/admin/dashboard" replace />;
 
   const L = (en, km) => (lang === "km" ? km : en);
   const today = data?.byDay?.at(-1)?.tokens ?? 0;

@@ -6,6 +6,8 @@ import { useLanguage } from "../../context/LanguageContext";
 import UsersListView from "./UsersListView";
 import UserDetailPanel from "./UserDetailPanel";
 import PromoCodes from "./PromoCodes";
+import { AdminAudit, AdminPayments, AdminStats } from "./AdminLists";
+import { can, isStaff } from "../../lib/permissions";
 
 export default function AdminDashboard() {
   const { user, loading: authLoading, logout } = useAuth();
@@ -23,9 +25,8 @@ export default function AdminDashboard() {
   }, [userId]);
 
   // Tab follows the URL: /admin/dashboard → Users, /admin/promo-codes → Promo Codes
-  const activeTab = location.pathname.startsWith("/admin/promo-codes")
-    ? "promo"
-    : "users";
+  const path = location.pathname;
+  const activeTab = path.startsWith("/admin/promo-codes") ? "promo" : path.startsWith("/admin/payments") ? "payments" : path.startsWith("/admin/audit") ? "audit" : "users";
 
   const normalizedUser = user && {
     ...user,
@@ -43,11 +44,11 @@ export default function AdminDashboard() {
     return null;
   }
 
-  if (normalizedUser.role !== "admin") {
+  if (!isStaff(normalizedUser)) {
     return (
       <div className="auth-loader" role="status" aria-label="Access denied">
         <i className="ri-error-warning-line" aria-hidden="true"></i>
-        <p>Access denied. Admin privileges required.</p>
+        <p>Access denied. Staff access required.</p>
       </div>
     );
   }
@@ -65,22 +66,33 @@ export default function AdminDashboard() {
           <i className="ri-group-line" aria-hidden="true"></i>
           Users
         </button>
-        <button
-          className={`admin-tab ${activeTab === "promo" ? "active" : ""}`}
-          onClick={() => {
-            setError("");
-            navigate("/admin/promo-codes");
-          }}
-        >
-          <i className="ri-ticket-price-line" aria-hidden="true"></i>
-          Promo Codes
-        </button>
+        {can(normalizedUser, "payments.read") && (
+          <button className={`admin-tab ${activeTab === "payments" ? "active" : ""}`} onClick={() => navigate("/admin/payments")}>
+            <i className="ri-bank-card-line" aria-hidden="true"></i> Payments
+          </button>
+        )}
+        {can(normalizedUser, "audit.read") && (
+          <button className={`admin-tab ${activeTab === "audit" ? "active" : ""}`} onClick={() => navigate("/admin/audit")}>
+            <i className="ri-file-list-3-line" aria-hidden="true"></i> Audit log
+          </button>
+        )}
+        {can(normalizedUser, "*") && (
+          <button className={`admin-tab ${activeTab === "promo" ? "active" : ""}`} onClick={() => { setError(""); navigate("/admin/promo-codes"); }}>
+            <i className="ri-ticket-price-line" aria-hidden="true"></i> Promo Codes
+          </button>
+        )}
       </div>
 
       {error && <div className="auth-alert error" role="alert">{error}</div>}
 
+      {activeTab === "users" && !selectedUserId && can(normalizedUser, "stats.read") && <AdminStats />}
+
       {activeTab === "promo" ? (
-        <PromoCodes />
+        can(normalizedUser, "*") ? <PromoCodes /> : null
+      ) : activeTab === "payments" ? (
+        <AdminPayments />
+      ) : activeTab === "audit" ? (
+        <AdminAudit />
       ) : selectedUserId ? (
         <UserDetailPanel
           userId={selectedUserId}

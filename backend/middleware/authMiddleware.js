@@ -65,6 +65,10 @@ export async function protect(req, res, next) {
       });
     }
 
+    if (user.banned) {
+      return res.status(403).json({ success: false, code: "ACCOUNT_BANNED", message: "This account is suspended." + (user.bannedReason ? ` Reason: ${user.bannedReason}` : "") });
+    }
+
     req.user = user;
     return next();
   } catch (_error) {
