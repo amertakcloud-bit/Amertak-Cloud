@@ -133,6 +133,8 @@ export async function synthesizeGemini({ apiKey, text, voice, style = "natural" 
   } catch (err) {
     throw mapGeminiError(err);
   }
+  // WAV is returned as-is (no ffmpeg process: nothing to hang or be slow on Vercel). Set TTS_MP3=true for smaller mp3 files.
+  if (process.env.TTS_MP3 !== "true") return { audio: wav, contentType: "audio/wav", voice: v, provider: "gemini", chars: clean.length };
   try {
     const mp3 = await convertToAudio(wav, { format: "mp3", bitrate: 96, timeoutMs: 12000 });
     return { audio: mp3.audio, contentType: "audio/mpeg", voice: v, provider: "gemini", chars: clean.length };

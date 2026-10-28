@@ -555,7 +555,7 @@ function Workspace({ id }) {
         edit((p) => ({ ...p, captionStyle: hlStyle(p), clips: [...p.clips.filter((c) => !(c.type === "caption" && c.source === src.id)), ...caps.map((c) => ({ ...c, style: hlStyle(p) }))] }));
         let done = 0;
         await pool(caps, 2, async (c, i) => {
-          results[i] = await voiceForCue({ text: c.text, voice: names[i], slot: c.dur, signal, job: started.job, onRetry: (n) => progress(56 + (done / caps.length) * 42, `${t("veTaskVoice")} ${done}/${caps.length} · ${t("veRetrying")} (${n})`) });
+          results[i] = await voiceForCue({ text: c.text, voice: names[i], slot: c.dur, signal, job: started.job, onWait: (sec, limited) => progress(56 + (done / caps.length) * 42, `${t("veTaskVoice")} ${done}/${caps.length} · ${limited ? t("veRateWait") : t("veRetrying")} ${sec}s`) });
           done += 1;
           progress(56 + (done / caps.length) * 42, `${t("veTaskVoice")} ${done}/${caps.length}`);
         }, signal);

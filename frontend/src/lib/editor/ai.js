@@ -62,8 +62,27 @@ export async function speedUpBlob(blob, factor) {
 
 // 3) Khmer voice for one cue (Gemini TTS, paid through `job`): one request; if the speech is longer than its
 // slot it is sped up locally (max 1.5×) — free, no second generation.
-export async function voiceForCue({ text, voice, slot, signal, job, onRetry }) {
-  const res = await withRetry(() => toolsApi.tts({ text, voice: legacyVoice(voice), style: "natural" }, signal, { job }), { signal, retries: 3, baseMs: 1500, onRetry });
+export async function voiceForCue({ text, voice, slot, signal, job, onRetry, onWait }) {
+  // Gemini's TTS has strict rate limits: on 429/timeouts wait (with a visible countdown) and try again,
+  // anything else fails at once with the real reason instead of hanging.
+  let res;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      res = await toolsApi.tts({ text, voice: legacyVoice(voice), style: "natural" }, signal, { job });
+      break;
+    } catch (e) {
+      const limited = e?.status === 429 || e?.code === "QUOTA_EXCEEDED" || e?.code === "RATE_LIMITED";
+      const transient = limited || e?.code === "TIMEOUT" || e?.code === "NETWORK" || e?.code === "TTS_TIMEOUT" || e?.code === "GEMINI_UNAVAILABLE" || (e?.status >= 500 && e?.code !== "TTS_EMPTY");
+      if (!transient || attempt >= 4 || signal?.aborted) throw e;
+      const wait = limited ? 12 + attempt * 10 : 2 + attempt * 2; // seconds
+      onRetry?.(attempt + 1, e);
+      for (let s = wait; s > 0; s--) {
+        if (signal?.aborted) throw new ApiError("Cancelled", { code: "ABORTED" });
+        onWait?.(s, limited);
+        await new Promise((r) => setTimeout(r, (typeof window !== "undefined" && window.__voiceTickMs) || 1000));
+      }
+    }
+  }
   let blob = res.blob;
   let dur = await Promise.race([audioDuration(blob), new Promise((_, rej) => setTimeout(() => rej(new ApiError("Could not read the generated audio.", { code: "BAD_AUDIO" })), 15000))]);
   let rate = 0;
