@@ -6,6 +6,7 @@ import {
   validateGeminiKey,
   mapGeminiError,
 } from "../lib/geminiClient.js";
+import { getAdminGeminiKey } from "../lib/settings.js";
 import { RATES, refundJob, startJob, tokensForBytes, verifyJob } from "../lib/billing.js";
 import { asyncHandler } from "../middleware/errorMiddleware.js";
 import { MAX_CHUNK_SECONDS, transcribeChunk } from "../services/srt/chunk.js";
@@ -13,22 +14,23 @@ import { alignTextToWords, buildCues, cleanWords, cuesFromSegments, DEFAULTS, sa
 import { buildSrt, validateCues } from "../services/srt/srtFormat.js";
 
 // GET /api/srt/status — public: what the browser needs to configure itself.
-export const getStatus = (req, res) => {
+export const getStatus = asyncHandler(async (req, res) => {
   const models = getModels();
+  const adminKey = Boolean((await getAdminGeminiKey()).key);
   res.json({
     success: true,
     data: {
       transcribeModel: models.transcribe,
       fallbackModel: models.general,
-      serverKeyAvailable: serverKeyConfigured(),
-      serverKeyNeedsLogin: true,
+      serverKeyAvailable: adminKey,
+      serverKeyNeedsLogin: false,
       loggedIn: Boolean(req.user),
       chunk: { targetSeconds: 90, maxSeconds: MAX_CHUNK_SECONDS, sampleRate: 16000 },
       defaults: DEFAULTS,
       rates: { captionPerMB: RATES.captionPerMB },
     },
   });
-};
+});
 
 // POST /api/srt/validate-key — header x-gemini-api-key (the user's own key)
 export const validateKey = asyncHandler(async (req, res) => {

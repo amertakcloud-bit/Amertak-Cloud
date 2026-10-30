@@ -21,6 +21,15 @@ const adminService = {
   getPayments: (params) => api.get("/admin/payments", params),
   getAudit: (params) => api.get("/admin/audit", params),
   getStats: () => api.get("/admin/stats"),
+  getGeminiSetting: () => api.get("/admin/settings/gemini"),
+  saveGeminiSetting: (body) => api.put("/admin/settings/gemini", body),
+  deleteGeminiSetting: () => api.delete("/admin/settings/gemini"),
+  testGeminiSetting: () => api.post("/admin/settings/gemini/test"),
+  broadcast: (body) => api.post("/admin/broadcast", body),
+
+  // message //Test Message to Users
+  addMessage: (userId, message, reson = "") =>
+    api.post(`/admin/user/${userId}/message`, { message, reson }),
 
   // Promo codes
   getPromoCodes: (params) => api.get("/admin/promo-codes", { params }),

@@ -83,3 +83,84 @@ export function AdminStats() {
   const items = [["ri-group-line", s.users, "Users"], ["ri-forbid-line", s.banned, "Suspended"], ["ri-money-dollar-circle-line", `$${s.revenue}`, "Revenue"], ["ri-coin-line", s.tokensSold, "Tokens sold"]];
   return <div className="adm-stats">{items.map(([i, v, l]) => <div key={l} className="adm-stat"><i className={i} /><div><b>{v}</b><span>{l}</span></div></div>)}</div>;
 }
+
+export function AdminSettings() {
+  const [st, setSt] = useState(null);
+  const [key, setKey] = useState("");
+  const [show, setShow] = useState(false);
+  const [ttsModel, setTtsModel] = useState("");
+  const [textModel, setTextModel] = useState("");
+  const [msg, setMsg] = useState({ type: "", text: "" });
+  const [busy, setBusy] = useState(false);
+  const load = () => adminService.getGeminiSetting().then((r) => { setSt(r.data); setTtsModel(r.data.ttsModel || ""); setTextModel(r.data.textModel || ""); }).catch((e) => setMsg({ type: "error", text: e.message }));
+  useEffect(() => { load(); }, []);
+  const run = async (fn, ok) => {
+    setBusy(true); setMsg({ type: "", text: "" });
+    try { const r = await fn(); if (r?.data && r.data.hasKey !== undefined) { setSt(r.data); } setMsg({ type: "success", text: ok(r) }); setKey(""); }
+    catch (e) { setMsg({ type: "error", text: e.message || "Failed." }); }
+    finally { setBusy(false); }
+  };
+  if (!st && !msg.text) return <SkeletonStats n={2} />;
+  return (
+    <div className="admin-panel">
+      <div className="admin-panel-header"><h2>AI settings</h2></div>
+      {msg.text && <div className={`auth-alert ${msg.type}`} role="status">{msg.text}</div>}
+      <div className="admin-detail-card">
+        <label>Gemini API key (used by every user — users are never asked for a key)</label>
+        <p>
+          {st?.hasKey ? <>Active: <b>{st.masked}</b> <span className="role-badge">{st.source === "admin" ? "set here" : "server env"}</span></> : <b>No key set — AI tools are disabled until you add one.</b>}
+        </p>
+        <form className="admin-add-tokens-form" onSubmit={(e) => { e.preventDefault(); if (!key.trim()) return; run(() => adminService.saveGeminiSetting({ key: key.trim() }), () => "Key checked with Google and saved (encrypted)."); }}>
+          <div style={{ position: "relative", flex: 1, minWidth: 220 }}>
+            <input type={show ? "text" : "password"} value={key} onChange={(e) => setKey(e.target.value)} placeholder="AIza… / AQ.…" autoComplete="off" spellCheck={false} aria-label="Gemini API key" style={{ width: "100%", paddingRight: 40 }} />
+            <button type="button" onClick={() => setShow((v) => !v)} aria-label="Show / hide" style={{ position: "absolute", right: 6, top: 6 }}><i className={show ? "ri-eye-off-line" : "ri-eye-line"} /></button>
+          </div>
+          <button type="submit" className="admin-btn admin-btn-primary" disabled={busy || !key.trim()}><i className="ri-save-3-line" /> {st?.hasKey ? "Replace key" : "Save key"}</button>
+          {st?.hasKey && <button type="button" className="admin-btn" disabled={busy} onClick={() => run(() => adminService.testGeminiSetting(), () => "Key works.")}><i className="ri-pulse-line" /> Test</button>}
+          {st?.source === "admin" && <button type="button" className="admin-btn admin-btn-danger" disabled={busy} onClick={() => run(() => adminService.deleteGeminiSetting(), () => "Key removed.")}><i className="ri-delete-bin-line" /> Remove</button>}
+        </form>
+      </div>
+      <form className="admin-detail-card" onSubmit={(e) => { e.preventDefault(); run(() => adminService.saveGeminiSetting({ ttsModel, textModel }), () => "Models saved."); }}>
+        <label>Models (leave empty for the defaults)</label>
+        <div className="adm-two">
+          <input value={ttsModel} onChange={(e) => setTtsModel(e.target.value)} placeholder="Voice model (TTS)" aria-label="TTS model" />
+          <input value={textModel} onChange={(e) => setTextModel(e.target.value)} placeholder="Text model (translate / AI)" aria-label="Text model" />
+        </div>
+        <button type="submit" className="admin-btn admin-btn-primary" disabled={busy}><i className="ri-save-3-line" /> Save models</button>
+      </form>
+    </div>
+  );
+}
+
+export function AdminBroadcast() {
+  const [target, setTarget] = useState("all");
+  const [user, setUser] = useState("");
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [msg, setMsg] = useState({ type: "", text: "" });
+  const [busy, setBusy] = useState(false);
+  async function send(e) {
+    e.preventDefault();
+    if (target === "all" && !window.confirm("Send this notification to ALL users?")) return;
+    setBusy(true); setMsg({ type: "", text: "" });
+    try { const r = await adminService.broadcast({ target, user: user.trim(), title: title.trim(), body: body.trim() }); setMsg({ type: "success", text: r.message || "Sent." }); setTitle(""); setBody(""); }
+    catch (err) { setMsg({ type: "error", text: err.message || "Failed." }); }
+    finally { setBusy(false); }
+  }
+  return (
+    <div className="admin-panel">
+      <div className="admin-panel-header"><h2>Send notification</h2></div>
+      {msg.text && <div className={`auth-alert ${msg.type}`} role="status">{msg.text}</div>}
+      <form className="admin-detail-card adm-form" onSubmit={send}>
+        <div className="ve-seg tk-seg" role="radiogroup" aria-label="Audience" style={{ display: "flex", gap: 6 }}>
+          <button type="button" role="radio" aria-checked={target === "all"} className={`admin-btn ${target === "all" ? "admin-btn-primary" : ""}`} onClick={() => setTarget("all")}><i className="ri-group-line" /> All users</button>
+          <button type="button" role="radio" aria-checked={target === "user"} className={`admin-btn ${target === "user" ? "admin-btn-primary" : ""}`} onClick={() => setTarget("user")}><i className="ri-user-line" /> One user</button>
+        </div>
+        {target === "user" && <input value={user} onChange={(e) => setUser(e.target.value)} placeholder="User email or id" aria-label="User" required />}
+        <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} placeholder="Title" aria-label="Title" required />
+        <textarea value={body} onChange={(e) => setBody(e.target.value)} maxLength={400} rows={4} placeholder="Message (optional)" aria-label="Message" />
+        <button type="submit" className="admin-btn admin-btn-primary" disabled={busy || !title.trim()}><i className="ri-send-plane-line" /> Send</button>
+      </form>
+    </div>
+  );
+}

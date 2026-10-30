@@ -8,6 +8,7 @@ import { friendlyError } from "../../lib/errors";
 import { saveBlob } from "../../lib/download";
 import { useAuth } from "../../context/AuthContext";
 import { Link } from "react-router-dom";
+import QrScanner from "../../components/tools/QrScanner";
 
 const TYPES = [
   { id: "url", icon: "ri-link", key: "qrUrl" },
@@ -210,6 +211,7 @@ export default function GenerateQr() {
           </div>
         </div>
       </div>
+      <QrScanner />
     </ToolShell>
   );
 }

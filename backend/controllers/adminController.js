@@ -1,6 +1,9 @@
 import User from "../models/User.js";
 import { ROLES, isStaff, permsFor } from "../lib/permissions.js";
 import { afterGrant, audit, notify } from "../lib/ledger.js";
+import { geminiAdminStatus, saveAdminGemini, getAdminGeminiKey } from "../lib/settings.js";
+import { isValidKeyFormat, mapGeminiError, validateGeminiKey } from "../lib/geminiClient.js";
+import { AppError } from "../lib/AppError.js";
 import AuditLog from "../models/AuditLog.js";
 import Ledger from "../models/Ledger.js";
 import Payment from "../models/Payment.js";
@@ -587,4 +590,67 @@ export const adminStats = asyncHandler(async (_req, res) => {
     Payment.find({ status: "paid" }),
   ]);
   return res.json({ success: true, data: { users, banned, staff, paidCount: paid.length, revenue: Math.round(paid.reduce((s, p) => s + (p.price || 0), 0) * 100) / 100, tokensSold: paid.reduce((s, p) => s + (p.tokens || 0), 0) } });
+});
+
+
+// ── Site settings: the Gemini key is managed here by the admin (users are never asked for one) ──
+// GET /api/admin/settings/gemini → { hasKey, source: admin|env|none, masked, ttsModel, textModel }
+export const getGeminiSetting = asyncHandler(async (_req, res) => {
+  res.json({ success: true, data: await geminiAdminStatus() });
+});
+
+// PUT /api/admin/settings/gemini  { key?, ttsModel?, textModel? }  (key is validated with Google, then stored encrypted)
+export const putGeminiSetting = asyncHandler(async (req, res) => {
+  const body = req.body || {};
+  const patch = {};
+  if (typeof body.key === "string" && body.key.trim()) {
+    const key = body.key.trim();
+    if (!isValidKeyFormat(key)) throw new AppError(400, "INVALID_API_KEY_FORMAT", "The Gemini API key looks invalid (too short, or it contains spaces).");
+    try { await validateGeminiKey(key); } catch (e) { throw mapGeminiError(e); }
+    patch.key = key;
+  }
+  if (typeof body.ttsModel === "string") patch.ttsModel = body.ttsModel;
+  if (typeof body.textModel === "string") patch.textModel = body.textModel;
+  if (!Object.keys(patch).length) throw new AppError(400, "NOTHING_TO_SAVE", "Nothing to save.");
+  const status = await saveAdminGemini(patch, req.user._id);
+  await audit(req.user._id, "settings.gemini", "gemini", { key: patch.key ? "updated" : "unchanged", ttsModel: patch.ttsModel, textModel: patch.textModel }, req.ip);
+  res.json({ success: true, data: status, message: "Saved." });
+});
+
+// DELETE /api/admin/settings/gemini  → removes the admin key (falls back to GEMINI_API_KEY if set)
+export const deleteGeminiSetting = asyncHandler(async (req, res) => {
+  const status = await saveAdminGemini({ key: "" }, req.user._id);
+  await audit(req.user._id, "settings.gemini.remove", "gemini", {}, req.ip);
+  res.json({ success: true, data: status, message: "Key removed." });
+});
+
+// POST /api/admin/settings/gemini/test → checks the key currently in use
+export const testGeminiSetting = asyncHandler(async (_req, res) => {
+  const { key, source } = await getAdminGeminiKey();
+  if (!key) throw new AppError(503, "NO_SERVER_KEY", "No Gemini key is set yet.");
+  try { await validateGeminiKey(key); } catch (e) { throw mapGeminiError(e); }
+  res.json({ success: true, data: { ok: true, source } });
+});
+
+// ── Broadcast: send a notification to every user or to one user ──
+// POST /api/admin/broadcast  { title, body?, target: "all" | "user", user? (id or email) }
+export const sendBroadcast = asyncHandler(async (req, res) => {
+  const title = String(req.body?.title || "").trim().slice(0, 120);
+  const body = String(req.body?.body || "").trim().slice(0, 400);
+  const target = req.body?.target === "user" ? "user" : "all";
+  if (!title) throw new AppError(400, "TITLE_REQUIRED", "A title is required.");
+  let sent = 0;
+  if (target === "user") {
+    const ref = String(req.body?.user || "").trim();
+    if (!ref) throw new AppError(400, "USER_REQUIRED", "Choose a user (email or id).");
+    const u = ref.includes("@") ? await User.findOne({ email: ref.toLowerCase() }) : await User.findById(ref).catch(() => null);
+    if (!u) throw new AppError(404, "USER_NOT_FOUND", "User not found.");
+    await notify(u._id, "broadcast", title, body);
+    sent = 1;
+  } else {
+    const users = await User.find({ banned: { $ne: true } }).select("_id");
+    for (const u of users) { await notify(u._id, "broadcast", title, body); sent += 1; }
+  }
+  await audit(req.user._id, "broadcast.send", target === "all" ? "all" : String(req.body.user), { title, sent }, req.ip);
+  res.json({ success: true, data: { sent }, message: `Sent to ${sent} user${sent === 1 ? "" : "s"}.` });
 });

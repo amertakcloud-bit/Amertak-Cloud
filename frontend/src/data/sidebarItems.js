@@ -37,7 +37,7 @@ const sidebarItems = [
   {
     labelKey: "plantTitle",
     icon: "ri-stack-line",
-    path: "/plants",
+    path: "/plans",
   },
   {
     labelKey: "account",

@@ -11,6 +11,8 @@ const TOOL_LABEL = {
   caption: { en: "Caption / SRT", km: "Caption / SRT", icon: "ri-closed-captioning-line" },
   cloudshare: { en: "CloudShare", km: "CloudShare", icon: "ri-cloud-line" },
   aiedit: { en: "AI video editor", km: "AI កែវីដេអូ", icon: "ri-sparkling-2-line" },
+  voice: { en: "AI voice", km: "សំឡេង AI", icon: "ri-mic-line" },
+  srt: { en: "Caption / SRT", km: "Caption / SRT", icon: "ri-closed-captioning-line" },
   other: { en: "Other", km: "ផ្សេងៗ", icon: "ri-apps-line" },
 };
 const fmtDate = (d, lang) =>
@@ -81,6 +83,13 @@ function Dashboard() {
         <div className="tk-card ud-stat"><i className="ri-calendar-todo-line" /><div><b>{data ? today : <Skeleton h={20} w={48} />}</b><span>{L("Spent today", "ចំណាយថ្ងៃនេះ")}</span></div></div>
         <div className="tk-card ud-stat"><i className="ri-shopping-bag-3-line" /><div><b>{data ? data.boughtTokens : <Skeleton h={20} w={48} />}</b><span>{L("Tokens bought", "Token ដែលបានទិញ")}</span></div></div>
       </div>
+
+      <div className="ud-quick">
+        {[["/tools", "ri-tools-line", L("All tools", "ឧបករណ៍ទាំងអស់")], ["/tools/cloud", "ri-cloud-line", "CloudShare"], ["/topup", "ri-coin-line", L("Buy tokens", "ទិញ token")], ["/plans", "ri-vip-crown-line", L("Plans", "កញ្ចប់")], ["/settings", "ri-settings-3-line", L("Settings & API key", "ការកំណត់ និង API key")]].map(([to, ic, label]) => (
+          <Link key={to} to={to} className="tk-btn ghost"><i className={ic} />{label}</Link>
+        ))}
+      </div>
+      <p className="tk-hint"><i className="ri-gift-line" /> {L("Many tools are free and need no login or tokens (QR, downloader, audio export, voice, image→prompt).", "ឧបករណ៍ជាច្រើនឥតគិតថ្លៃ មិនចាំបាច់ login ឬ token (QR, downloader, audio, សំឡេង, image→prompt)។")}</p>
 
       {error && <div className="tk-alert tk-alert-error">{error}</div>}
 

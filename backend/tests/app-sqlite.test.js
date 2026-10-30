@@ -389,3 +389,48 @@ run("roles: permission matrix, role change guards, ban rules, payments/stats", a
   assert.ok(st.body.data.users >= 3 && typeof st.body.data.revenue === "number");
   assert.ok(Array.isArray((await call(m.admin.listPayments, { query: {}, user: adm })).body.data.items));
 });
+
+run("admin: manages the site Gemini key (encrypted, masked) and sends broadcasts", async () => {
+  const Notification = (await import("../models/Notification.js")).default;
+  const Setting = (await import("../models/Setting.js")).default;
+  const settings = await import("../lib/settings.js");
+  const mk = async (email) => { await call(m.auth.register, { body: { name: "Bc " + email[0], email, password: "password123", confirmPassword: "password123" } }); return m.User.findOne({ email }); };
+  const adm = await mk("bc-admin@example.com"); const u1 = await mk("bc-one@example.com"); const u2 = await mk("bc-two@example.com");
+  adm.role = "admin"; await adm.save();
+  delete process.env.GEMINI_API_KEY; settings.clearSettingsCache();
+  assert.equal((await call(m.admin.getGeminiSetting, { user: adm })).body.data.hasKey, false);
+
+  m.gem.deps.createClient = async () => ({ models: { get: async () => ({ name: "m" }) } });
+  await assert.rejects(call(m.admin.putGeminiSetting, { body: { key: "bad key" }, user: adm }), (e) => e.code === "INVALID_API_KEY_FORMAT");
+  const KEY = "AIzaSyADMINKEY1234567890abcdefghijk";
+  const ok = await call(m.admin.putGeminiSetting, { body: { key: KEY, ttsModel: "my-tts-model" }, user: adm });
+  assert.equal(ok.code, 200);
+  assert.equal(ok.body.data.source, "admin"); assert.equal(ok.body.data.masked, "AIza…ijk"); assert.equal(ok.body.data.ttsModel, "my-tts-model");
+  assert.ok(!JSON.stringify(ok.body).includes(KEY), "key never returned");
+  const raw = await Setting.findOne({ key: "gemini" });
+  assert.ok(!JSON.stringify(raw.value).includes(KEY), "key stored encrypted");
+  assert.equal((await settings.getAdminGeminiKey()).key, KEY);
+
+  // tools now resolve the admin key (guests too) and the model override is applied
+  const { requireGeminiKey } = await import("../middleware/geminiKey.js");
+  const req = { headers: {}, get: () => "" };
+  await new Promise((r) => requireGeminiKey(req, {}, r));
+  assert.equal(req.gemini.key, KEY); assert.equal(req.gemini.source, "server");
+  assert.equal(process.env.GEMINI_TTS_MODEL, "my-tts-model");
+
+  assert.equal((await call(m.admin.testGeminiSetting, { user: adm })).body.data.ok, true);
+  const del = await call(m.admin.deleteGeminiSetting, { user: adm });
+  assert.equal(del.body.data.hasKey, false);
+
+  // broadcast
+  await assert.rejects(call(m.admin.sendBroadcast, { body: { title: "" }, user: adm }), (e) => e.code === "TITLE_REQUIRED");
+  const one = await call(m.admin.sendBroadcast, { body: { title: "Hello", body: "Only you", target: "user", user: "bc-one@example.com" }, user: adm });
+  assert.equal(one.body.data.sent, 1);
+  assert.equal((await Notification.find({ user: u1._id, type: "broadcast" })).length, 1);
+  assert.equal((await Notification.find({ user: u2._id, type: "broadcast" })).length, 0);
+  const all = await call(m.admin.sendBroadcast, { body: { title: "Maintenance", target: "all" }, user: adm });
+  assert.ok(all.body.data.sent >= 3);
+  assert.equal((await Notification.find({ user: u2._id, type: "broadcast" })).length, 1);
+  await assert.rejects(call(m.admin.sendBroadcast, { body: { title: "x", target: "user", user: "nobody@example.com" }, user: adm }), (e) => e.code === "USER_NOT_FOUND");
+  delete process.env.GEMINI_TTS_MODEL;
+});

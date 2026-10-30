@@ -383,14 +383,6 @@ button:disabled {
     align-items: center;
 
     gap: .5rem;
-
-    button {
-        gap: .5rem;
-        background: var(--primary);
-        padding: .5rem;
-        border-radius: 5px;
-        color: var(--text);
-    }
 }
 
 

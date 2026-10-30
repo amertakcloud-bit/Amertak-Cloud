@@ -329,3 +329,47 @@ export function setCaptionHighlight(p, on, color = DEFAULT_HIGHLIGHT) {
   const patch = { karaoke: Boolean(on), hl: color };
   return { ...p, captionStyle: { ...p.captionStyle, ...patch }, clips: p.clips.map((c) => (c.type === "caption" ? { ...c, style: { ...c.style, ...patch } } : c)) };
 }
+
+// ── word-highlight templates ──
+// hlMode: color (word changes colour) · box (coloured box behind the word) · underline · pop (word grows) · glow · fill (spoken words stay coloured)
+export const HL_TEMPLATES = [
+  { id: "classic",  key: "veHl_classic",  look: { karaoke: true, hlMode: "color", hl: "#facc15", color: "#ffffff" } },
+  { id: "tiktok",   key: "veHl_tiktok",   look: { karaoke: true, hlMode: "pop", hl: "#facc15", color: "#ffffff", outline: true, outlineColor: "#000000", bold: true, bg: "rgba(0,0,0,0)" } },
+  { id: "pinkbox",  key: "veHl_pinkbox",  look: { karaoke: true, hlMode: "box", hl: "#ffffff", hlBg: "#ec4899", hlText: "#ffffff", color: "#ffffff", outline: true, outlineColor: "#000000", bold: true } },
+  { id: "whitebox", key: "veHl_whitebox", look: { karaoke: true, hlMode: "box", hl: "#111111", hlBg: "#ffffff", hlText: "#111111", color: "#ffffff", outline: true, outlineColor: "#000000", bold: true } },
+  { id: "greenfill",key: "veHl_greenfill",look: { karaoke: true, hlMode: "fill", hl: "#22c55e", color: "#ffffff", outline: true, outlineColor: "#000000", bold: true } },
+  { id: "cyanglow", key: "veHl_cyanglow", look: { karaoke: true, hlMode: "glow", hl: "#22d3ee", color: "#ffffff", bold: true, shadow: false } },
+  { id: "underline",key: "veHl_underline",look: { karaoke: true, hlMode: "underline", hl: "#f97316", color: "#ffffff", outline: true, outlineColor: "#000000", bold: true } },
+  { id: "redpop",   key: "veHl_redpop",   look: { karaoke: true, hlMode: "pop", hl: "#ef4444", color: "#ffffff", outline: true, outlineColor: "#000000", bold: true } },
+  { id: "purplebox",key: "veHl_purplebox",look: { karaoke: true, hlMode: "box", hl: "#ffffff", hlBg: "#a855f7", hlText: "#ffffff", color: "#ffffff", bold: true, bg: "rgba(0,0,0,0.45)" } },
+  { id: "bluefill", key: "veHl_bluefill", look: { karaoke: true, hlMode: "fill", hl: "#3b82f6", color: "#ffffff", bold: true, outline: true, outlineColor: "#000000" } },
+  { id: "mintunder",key: "veHl_mintunder",look: { karaoke: true, hlMode: "underline", hl: "#34d399", color: "#ffffff", bold: true, bg: "rgba(0,0,0,0.5)" } },
+  { id: "yellowbox",key: "veHl_yellowbox",look: { karaoke: true, hlMode: "box", hl: "#111111", hlBg: "#facc15", hlText: "#111111", color: "#ffffff", outline: true, outlineColor: "#000000", bold: true } },
+];
+const HL_KEYS = ["karaoke", "hlMode", "hl", "hlBg", "hlText", "color", "outline", "outlineColor", "bold", "bg", "shadow"];
+// Applies a highlight template to EVERY caption (and becomes the default for new ones).
+export function applyHighlightTemplate(p, tpl) {
+  const patch = Object.fromEntries(Object.entries(tpl.look).filter(([k]) => HL_KEYS.includes(k)));
+  return { ...p, captionStyle: { ...p.captionStyle, ...patch }, clips: p.clips.map((c) => (c.type === "caption" ? { ...c, style: { ...c.style, ...patch } } : c)) };
+}
+// "Apply to all": copies the chosen properties of one clip to every clip of the same kind.
+const ALL_KEYS = {
+  text: { style: true, opacity: true, fadeIn: true, fadeOut: true },
+  caption: { style: true, y: true, opacity: true, fadeIn: true, fadeOut: true },
+  visual: { brightness: true, contrast: true, saturate: true, opacity: true, fadeIn: true, fadeOut: true },
+  audio: { volume: true, fadeIn: true, fadeOut: true },
+};
+export const allKind = (c) => (c.type === "caption" ? "caption" : c.type === "text" ? "text" : c.type === "video" || c.type === "image" ? "visual" : "audio");
+export function applyToAll(p, clip) {
+  const kind = allKind(clip), keys = Object.keys(ALL_KEYS[kind]);
+  let n = 0;
+  const clips = p.clips.map((c) => {
+    if (c.id === clip.id || allKind(c) !== kind) return c;
+    n++;
+    const patch = {};
+    for (const k of keys) if (clip[k] !== undefined) patch[k] = k === "style" ? { ...clip.style } : clip[k];
+    return { ...c, ...patch };
+  });
+  const captionStyle = kind === "caption" ? { ...clip.style } : p.captionStyle;
+  return { project: { ...p, clips, captionStyle }, count: n };
+}

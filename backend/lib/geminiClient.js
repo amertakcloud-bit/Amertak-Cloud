@@ -60,19 +60,14 @@ export function resolveGeminiKey(req) {
   // The key the user saved in their account (set by the key middleware after decrypting).
   if (req.savedGeminiKey) return { key: req.savedGeminiKey, source: "account" };
 
-  const serverKey = (process.env.GEMINI_API_KEY || "").trim();
+  // The site's key: set by the admin in the admin panel (or GEMINI_API_KEY). Tools that cost tokens are
+  // guarded by login + a paid job elsewhere, so a guest may use this key only on the free tools.
+  const serverKey = (req.adminGeminiKey?.key || process.env.GEMINI_API_KEY || "").trim();
   if (!serverKey) {
     throw new AppError(
       503,
       "NO_SERVER_KEY",
-      "The server has no Gemini API key. Enter your own Gemini API key to use this tool."
-    );
-  }
-  if (!req.user) {
-    throw new AppError(
-      401,
-      "LOGIN_REQUIRED",
-      "Please log in to use the built-in key, or enter your own Gemini API key."
+      "The Gemini API key is not set up yet. Please ask the site admin to add it."
     );
   }
   return { key: serverKey, source: "server" };

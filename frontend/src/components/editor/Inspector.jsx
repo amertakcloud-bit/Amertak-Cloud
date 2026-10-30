@@ -2,6 +2,8 @@ import { useState } from "react";
 import { VOICE_LIST, legacyVoice } from "../../lib/editor/ai";
 import { DEFAULT_HIGHLIGHT, LANES } from "../../lib/editor/model";
 import Select from "../ui/Select";
+import { ColorStrips, IconSeg, RulerSlider, SWATCHES } from "./Strips";
+export { SWATCHES };
 
 const BGS = [
   ["rgba(0,0,0,0)", "veBgNone"],
@@ -11,7 +13,6 @@ const BGS = [
   ["rgba(250,204,21,0.9)", "veBgYellow"],
 ];
 const FONT_KEYS = ["sans", "serif", "mono", "round", "display"];
-export const SWATCHES = ["#ffffff", "#000000", "#facc15", "#f97316", "#ef4444", "#ec4899", "#a855f7", "#3b82f6", "#22d3ee", "#22c55e"];
 
 function Field({ label, children }) {
   return (
@@ -37,14 +38,7 @@ function Range({ label, value, min, max, step, onChange, fmt = (v) => v }) {
   );
 }
 function ColorPick({ value, onChange }) {
-  return (
-    <div className="ve-colors">
-      {SWATCHES.map((c) => (
-        <button key={c} type="button" className={"ve-sw" + (value?.toLowerCase() === c ? " on" : "")} style={{ background: c }} onClick={() => onChange(c)} aria-label={c} />
-      ))}
-      <input type="color" className="ve-color" value={/^#[0-9a-f]{6}$/i.test(value) ? value : "#ffffff"} onChange={(e) => onChange(e.target.value)} aria-label="custom color" />
-    </div>
-  );
+  return <ColorStrips value={value} onChange={onChange} />;
 }
 
 // A generated Khmer voice: change the sentence / speaker and make it again.
@@ -99,12 +93,10 @@ export default function Inspector({ clip, project, onChange, onApplyCaptionStyle
           </Field>
           <Range label={t("veFontSize")} value={st.size ?? 6} min={2} max={20} step={0.2} onChange={(v) => style({ size: v })} />
           <Field label={t("veColor")}><ColorPick value={st.color} onChange={(c) => style({ color: c })} /></Field>
-          <div className="tk-seg ve-seg" role="group" aria-label={t("veAlign")}>
-            {[["left", "ri-align-left"], ["center", "ri-align-center"], ["right", "ri-align-right"]].map(([k, ic]) => (
-              <button key={k} type="button" className={(st.align || "center") === k ? "active" : ""} onClick={() => style({ align: k })} aria-label={k}><i className={ic} /></button>
-            ))}
-            <button type="button" className={st.bold ? "active" : ""} onClick={() => style({ bold: !st.bold })} aria-label={t("veBold")}><i className="ri-bold" /></button>
-            <button type="button" className={st.italic ? "active" : ""} onClick={() => style({ italic: !st.italic })} aria-label={t("veItalic")}><i className="ri-italic" /></button>
+          <IconSeg label={t("veAlign")} value={st.align || "center"} onChange={(k) => style({ align: k })} items={[["left", "ri-align-left"], ["center", "ri-align-center"], ["right", "ri-align-right"]]} />
+          <div className="ts-strip ts-seg" role="group">
+            <button type="button" className={st.bold ? "on" : ""} onClick={() => style({ bold: !st.bold })} aria-label={t("veBold")}><i className="ri-bold" /></button>
+            <button type="button" className={st.italic ? "on" : ""} onClick={() => style({ italic: !st.italic })} aria-label={t("veItalic")}><i className="ri-italic" /></button>
           </div>
           <Field label={t("veBackground")}>
             <Select value={st.bg ?? "rgba(0,0,0,0)"} onChange={(e) => style({ bg: e.target.value })}>
@@ -118,13 +110,15 @@ export default function Inspector({ clip, project, onChange, onApplyCaptionStyle
           <div className="ve-checks">
             <label><input type="checkbox" checked={Boolean(st.karaoke)} onChange={(e) => style({ karaoke: e.target.checked, hl: st.hl || DEFAULT_HIGHLIGHT })} /> {t("veHighlight")}</label>
           </div>
+          {st.karaoke && (
+            <Field label={t("veHlStyle")}>
+              <Select value={st.hlMode || "color"} onChange={(e) => style({ hlMode: e.target.value })}>
+                {["color", "box", "underline", "pop", "glow", "fill"].map((k) => <option key={k} value={k}>{t(`veHlMode_${k}`)}</option>)}
+              </Select>
+            </Field>
+          )}
           {st.karaoke && <Field label={t("veHighlightColor")}><ColorPick value={st.hl || DEFAULT_HIGHLIGHT} onChange={(c) => style({ hl: c })} /></Field>}
           {st.outline && <Field label={t("veOutlineColor")}><ColorPick value={st.outlineColor || "#000000"} onChange={(c) => style({ outlineColor: c })} /></Field>}
-          {clip.type === "caption" && (
-            <button type="button" className="tk-btn ghost small" onClick={() => onApplyCaptionStyle(clip)}>
-              <i className="ri-brush-line" />{t("veApplyAll")}
-            </button>
-          )}
         </Section>
       )}
 
@@ -134,8 +128,8 @@ export default function Inspector({ clip, project, onChange, onApplyCaptionStyle
             <Range label={t("veX")} value={clip.x ?? 0.5} min={0} max={1} step={0.01} onChange={(v) => num("x", v)} fmt={pct} />
             <Range label={t("veY")} value={clip.y ?? 0.5} min={0} max={1} step={0.01} onChange={(v) => num("y", v)} fmt={pct} />
           </div>
-          {isVisual && <Range label={t("veScale")} value={clip.scale ?? 1} min={0.1} max={3} step={0.05} onChange={(v) => num("scale", v)} fmt={pct} />}
-          <Range label={t("veRotation")} value={clip.rotation ?? 0} min={-180} max={180} step={1} onChange={(v) => num("rotation", v)} fmt={(v) => `${v}°`} />
+          {isVisual && <RulerSlider label={t("veScale")} value={clip.scale ?? 1} min={0.1} max={3} step={0.05} zero={1} onChange={(v) => num("scale", v)} fmt={pct} />}
+          <RulerSlider label={t("veRotation")} value={clip.rotation ?? 0} min={-180} max={180} step={1} zero={0} onChange={(v) => num("rotation", v)} fmt={(v) => `${v}°`} />
           <Range label={t("veOpacity")} value={clip.opacity ?? 1} min={0} max={1} step={0.05} onChange={(v) => num("opacity", v)} fmt={pct} />
           <div className="ve-row2">
             <button type="button" className={"tk-btn ghost small" + (clip.flipX ? " on" : "")} onClick={() => onChange({ flipX: !clip.flipX })}><i className="ri-flip-horizontal-line" />{t("veFlip")}</button>
@@ -175,6 +169,10 @@ export default function Inspector({ clip, project, onChange, onApplyCaptionStyle
           <Range label={t("veVolume")} value={clip.volume ?? 1} min={0} max={2} step={0.05} onChange={(v) => num("volume", v)} fmt={pct} />
         </Section>
       )}
+
+      <button type="button" className="tk-btn full ve-applyall" onClick={() => onApplyCaptionStyle(clip)}>
+        <i className="ri-stack-line" />{t(`veApplyAll_${clip.type === "caption" ? "caption" : clip.type === "text" ? "text" : isVisual ? "visual" : "audio"}`)}
+      </button>
     </div>
   );
 }

@@ -1,19 +1,35 @@
-import { CAPTION_PRESETS } from "../../lib/editor/model";
-import { SWATCHES } from "./Inspector";
+import { CAPTION_PRESETS, HL_TEMPLATES } from "../../lib/editor/model";
+import { ColorStrips } from "./Strips";
 
-// Caption looks + spoken-word highlight colour (lives in the "Text" tab).
-export default function CaptionStyle({ t, busy, highlight, onHighlight, onCaptionPreset }) {
+// A tiny CSS preview of how a highlight template looks on its "active" word.
+function Preview({ look }) {
+  const mode = look.hlMode || "color";
+  const base = { color: look.color || "#fff" };
+  const hot = mode === "box" ? { background: look.hlBg || look.hl, color: look.hlText || "#111" }
+    : mode === "underline" ? { color: base.color, boxShadow: `inset 0 -3px 0 ${look.hl}` }
+    : mode === "pop" ? { color: look.hl, transform: "scale(1.22)", display: "inline-block" }
+    : mode === "glow" ? { color: look.hl, textShadow: `0 0 8px ${look.hl}, 0 0 14px ${look.hl}` }
+    : { color: look.hl };
+  const first = mode === "fill" ? { color: look.hl } : base;
+  return <span className="ve-tpl-prev"><span style={first}>Aa</span><span className="w" style={hot}>Hi</span><span style={base}>ខ្ញុំ</span></span>;
+}
+
+// Caption looks + spoken-word highlight templates (lives in the "Text" tab). Templates apply to EVERY caption.
+export default function CaptionStyle({ t, busy, highlight, onHighlight, onTemplate, activeTemplate, onCaptionPreset }) {
   return (
     <>
     <section className="ve-sec">
       <h4>{t("veHighlightTitle")}</h4>
       <label className="ve-checks"><input type="checkbox" checked={highlight.on} onChange={(e) => onHighlight(e.target.checked, highlight.color)} /> {t("veHighlight")}</label>
-      <div className="ve-colors" role="group" aria-label={t("veHighlightColor")}>
-        {SWATCHES.map((c) => (
-          <button key={c} type="button" className={"ve-sw" + (highlight.color.toLowerCase() === c ? " on" : "")} style={{ background: c }} aria-label={c} onClick={() => onHighlight(true, c)} />
+      <div className="ve-tpl-grid" role="listbox" aria-label={t("veHlTemplates")}>
+        {HL_TEMPLATES.map((tp) => (
+          <button key={tp.id} type="button" role="option" aria-selected={activeTemplate === tp.id} className={"ve-tpl" + (activeTemplate === tp.id ? " on" : "")} onClick={() => onTemplate(tp)} disabled={busy}>
+            <Preview look={tp.look} /><em>{t(tp.key)}</em>
+          </button>
         ))}
-        <input type="color" className="ve-color" value={/^#[0-9a-f]{6}$/i.test(highlight.color) ? highlight.color : "#facc15"} onChange={(e) => onHighlight(true, e.target.value)} aria-label={t("veHighlightColor")} />
       </div>
+      <p className="tk-hint">{t("veHlAllHint")}</p>
+      <ColorStrips value={highlight.color} onChange={(c) => onHighlight(true, c)} />
     </section>
 
     <section className="ve-sec">
@@ -27,7 +43,6 @@ export default function CaptionStyle({ t, busy, highlight, onHighlight, onCaptio
         ))}
       </div>
     </section>
-
     </>
   );
 }

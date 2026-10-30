@@ -53,6 +53,16 @@ export default function UserDetailPanel({ userId, onBack, onTokenAdded }) {
     if (ok) f.reset();
   }
 
+  // Test Message to Users
+  async function handleMessage(e, sign) {
+    e.preventDefault();
+    const f = e.target; const message = Text(f.message.value); const reason = f.reason.value.trim();
+    if (!Text.isInteger(message) || message <= 0) return setError("Please enter broadcast message!");
+    if (sign < 0 && !reason) return setError("A reason is required.");
+    const ok = await act(() => (sign > 0 ? adminService.addMessage(userId, message, reason) : adminService.deductTokens(userId, message, reason)), (r) => `${sign > 0 ? "Added" : "Removed"} ${message} tokens. New balance: ${r.data?.user?.tokens}`);
+    if (ok) f.reset();
+  }
+
   async function handleBan(e) {
     e.preventDefault();
     const reason = e.target.reason.value.trim();
@@ -127,6 +137,13 @@ export default function UserDetailPanel({ userId, onBack, onTokenAdded }) {
 
       {can(me, "tokens.adjust") && (
         <div className="adm-two">
+          {/*
+          <form className="admin-add-tokens-form" onSubmit={(e) => handleMessage(e, 1)}>
+            <label htmlFor="tk-add">BroadCasts</label>
+            <input name="reason" maxLength={300} placeholder="Reason (optional)" aria-label="Reason" />
+            <button type="submit" className="admin-btn admin-btn-primary"><i className="ri-add-line" aria-hidden="true"></i> Add</button>
+          </form>
+          */}
           <form className="admin-add-tokens-form" onSubmit={(e) => handleTokens(e, 1)}>
             <label htmlFor="tk-add">Add tokens</label>
             <input id="tk-add" name="tokens" type="number" min="1" placeholder="e.g. 500" />

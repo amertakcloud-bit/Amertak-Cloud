@@ -3,11 +3,11 @@ import { planChunks } from "./audio/chunker.js";
 import { toolsApi, withRetry, ApiError } from "../services/toolsApi.js";
 
 // Browser side of the SRT tool:
-//   file → decode (mono 16 kHz) → silence-aware chunks (≤ 100 s, ≈ 3 MB each) →
+//   file → decode (mono 16 kHz) → silence-aware chunks (≤ 60 s, ≈ 2 MB each) →
 //   POST /api/srt/chunk (sequential, retried) → merge → POST /api/srt/cues
 // Chunking keeps every request under Vercel's 4.5 MB body limit.
 
-const CONCURRENCY = 3;
+const CONCURRENCY = 5;
 
 export async function transcribeFile(file, { settings, onProgress = () => {}, onCharged = () => {}, signal } = {}) {
   onProgress({ stage: "decode", percent: 2 });
@@ -31,7 +31,7 @@ export async function transcribeFile(file, { settings, onProgress = () => {}, on
   let silentChunks = 0;
   let inSilence = 0;
 
-  // Chunks run in parallel (3 at a time) — a 5-minute file takes ~1 chunk of time instead of 3.
+  // Chunks run in parallel (5 at a time) — a 5-minute file takes ~1 chunk of time instead of 3.
   const results = new Array(plan.length);
   const frac = new Array(plan.length).fill(0); // 0..1 per chunk → live percent
   const report = () => onProgress({ stage: "transcribe", chunks: plan.length, percent: 5 + Math.round((frac.reduce((a, b) => a + b, 0) / plan.length) * 85) });

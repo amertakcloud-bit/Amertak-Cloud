@@ -147,7 +147,7 @@ function App() {
             }
           />
           <Route
-            path="plants"
+            path="plans"
             element={
               <motion.div {...getPageAnimation(location, prev)} key="plants">
                 <Plants />
@@ -317,6 +317,14 @@ function App() {
                 <AdminDashboard />
               </motion.div>
             }
+          />
+          <Route
+            path="/admin/settings"
+            element={<motion.div {...getPageAnimation(location, prev)} key="admin-settings"><AdminDashboard /></motion.div>}
+          />
+          <Route
+            path="/admin/broadcast"
+            element={<motion.div {...getPageAnimation(location, prev)} key="admin-broadcast"><AdminDashboard /></motion.div>}
           />
           <Route
             path="/admin/payments"

@@ -280,6 +280,7 @@
   align-items: center;
   cursor: pointer;
   transition: all var(--transition);
+  font-family: serif;
 }
 
 .admin-table-row:hover {
@@ -773,3 +774,9 @@
   font-size: 2.5rem;
   color: var(--primary);
 }
+
+.adm-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.adm-form { display: grid; gap: 10px; }
+.adm-form input, .adm-form textarea, .adm-two input, .admin-detail-card input[type=password], .admin-detail-card input[type=text] { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 9px 12px; font: inherit; min-width: 0; }
+.adm-pager { display: flex; gap: 10px; align-items: center; justify-content: center; padding: 12px; }
+@media (max-width: 720px) { .adm-two { grid-template-columns: minmax(0, 1fr); } }

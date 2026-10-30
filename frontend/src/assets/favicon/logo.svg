@@ -1,0 +1,21 @@
+<svg 
+ xmlns="http://www.w3.org/2000/svg"
+ xmlns:xlink="http://www.w3.org/1999/xlink"
+ width="189px" height="264px">
+<defs>
+<filter id="Filter_0">
+    <feFlood flood-color="rgb(255, 255, 255)" flood-opacity="1" result="floodOut" />
+    <feComposite operator="atop" in="floodOut" in2="SourceGraphic" result="compOut" />
+    <feBlend mode="normal" in="compOut" in2="SourceGraphic" />
+</filter>
+<linearGradient id="PSgrad_0" x1="0%" x2="0%" y1="100%" y2="0%">
+  <stop offset="0%" stop-color="rgb(182,53,156)" stop-opacity="1" />
+  <stop offset="100%" stop-color="rgb(239,10,106)" stop-opacity="1" />
+</linearGradient>
+
+</defs>
+<g filter="url(#Filter_0)">
+<path fill-rule="evenodd"  fill="url(#PSgrad_0)"
+ d="M152.051,164.000 C119.429,197.333 86.807,230.667 54.185,264.000 C54.185,264.000 51.228,212.414 52.187,192.000 C52.394,187.594 58.179,178.1000 58.179,178.1000 L189.000,50.000 L189.000,197.1000 L152.051,164.000 ZM131.000,85.000 L-0.000,213.1000 L-0.000,66.000 L37.000,99.1000 C69.667,66.667 102.333,33.333 135.000,-0.000 C135.000,-0.000 137.961,51.586 137.000,71.1000 C136.793,76.406 131.000,85.000 131.000,85.000 Z"/>
+</g>
+</svg>

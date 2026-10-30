@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import ToolShell from "../../components/tools/ToolShell";
 import Dropzone from "../../components/tools/Dropzone";
-import GeminiKeyPanel, { useGeminiAccess } from "../../components/tools/GeminiKey";
+import { KeyNotice, useGeminiAccess } from "../../components/tools/GeminiKey";
 import { useLanguage } from "../../context/LanguageContext";
 import { useFeedback } from "../../components/ui/Feedback";
 import useToolsStatus from "../../hooks/useToolsStatus";
@@ -69,7 +69,7 @@ export default function ImageToPrompt() {
 
   return (
     <ToolShell icon="ri-image-ai-line" titleKey="ImageToPrompt" subKey="ipSub">
-      <GeminiKeyPanel status={status} access={access} />
+      <KeyNotice access={access} />
       <div className="tk-grid-2">
         <div className="tk-card">
           <Dropzone accept="image/png,image/jpeg,image/webp,image/heic,image/heif" icon="ri-image-add-line" hintKey="ipDropHint" file={file} onFile={pick} onClear={() => { setFile(null); setResult(null); }} disabled={busy} />

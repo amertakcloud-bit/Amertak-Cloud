@@ -17,8 +17,16 @@ export function useGeminiAccess(status) {
   const uid = user?.id || user?._id || "";
   useEffect(() => { if (uid) loadAccountKey(); else resetAccountKey(); }, [uid]);
   const serverKey = Boolean(status?.tools?.srt?.serverKey);
-  const source = key ? "user" : user && account.hasKey ? "account" : user && serverKey ? "server" : "none";
+  const source = key ? "user" : user && account.hasKey ? "account" : serverKey ? "server" : "none"; // the site key (set by the admin) works for everyone
   return { key, source, ready: source !== "none", serverKey, loggedIn: Boolean(user), account };
+}
+
+// Shown on the tool pages only when NO key works at all: users are never asked for a key there —
+// the admin adds the site key; users may add their own (optional) in Settings.
+export function KeyNotice({ access }) {
+  const { t } = useLanguage();
+  if (access.ready) return null;
+  return <div className="tk-alert err" role="alert"><i className="ri-key-2-line" />{t("keyAdminMissing")}</div>;
 }
 
 export default function GeminiKeyPanel({ status, access, onOpenChange }) {

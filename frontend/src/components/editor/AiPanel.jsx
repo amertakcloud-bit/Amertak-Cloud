@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import Select from "../ui/Select";
 import { VOICE_LIST } from "../../lib/editor/ai";
-import GeminiKeyPanel from "../tools/GeminiKey";
+import { KeyNotice } from "../tools/GeminiKey";
 
 const SUGGESTIONS = ["veAiEx1", "veAiEx2", "veAiEx3", "veAiEx4"];
 
@@ -9,7 +9,7 @@ const SUGGESTIONS = ["veAiEx1", "veAiEx2", "veAiEx3", "veAiEx4"];
 // Only AI lives here: the chat, AI captions and translate-to-Khmer voice. Media tools are in "Media", caption looks in "Text".
 export default function AiPanel({
   t, user, status, access, busy, aiBusy, history, onPrompt, cost, source, sourceClips, setAiSource, aiCost,
-  onGenerateCaptions, onGenerateKhmerCaptions, onExtractAudio, highlight, onHighlight, onTranslate, onRemoveSilence, onCaptionPreset, lang, setLang, voice, setVoice, orig, setOrig, project, balance,
+  onGenerateCaptions, onGenerateKhmerCaptions, onExtractAudio, highlight, onHighlight, onTranslate, onVoiceFromCaptions, captionCount, onRemoveSilence, onCaptionPreset, lang, setLang, voice, setVoice, orig, setOrig, project, balance,
 }) {
   const [text, setText] = useState("");
   const box = useRef(null);
@@ -21,7 +21,7 @@ export default function AiPanel({
   };
   return (
     <div className="ve-ai">
-      <GeminiKeyPanel status={status} access={access} />
+      <KeyNotice access={access} />
 
       <section className="ve-sec ve-ai-chat">
         <h4><i className="ri-sparkling-2-fill" /> {t("veAiEditor")}</h4>
@@ -59,8 +59,9 @@ export default function AiPanel({
         <button type="button" className="tk-btn full" disabled={busy || !source} onClick={onGenerateKhmerCaptions}><i className="ri-translate-2" />{t("veGenCaptionsKm")}</button>
         <p className="tk-hint">{t("veGenCaptionsKmHint")}</p>
       </section>
-
-      <section className="ve-sec">
+      
+      {/* Hide Ai Translate & speech ai*/}
+      <section className="ve-sec" style={{ display: "" }}>
         <h4>{t("veTranslateTitle")}</h4>
         <p className="tk-hint">{t("veTranslateHint")}</p>
         <label className="ve-field"><span>{t("veFrom")}</span>
@@ -82,6 +83,11 @@ export default function AiPanel({
         </label>
         <p className="tk-hint"><i className="ri-coin-line" /> {t("veVoiceCost")}</p>
         <button type="button" className="tk-btn full" disabled={busy || !source} onClick={onTranslate}><i className="ri-translate-2" />{t("veTranslateBtn")}</button>
+        <hr className="ve-hr" />
+        <h4>{t("veVfcTitle")}</h4>
+        <p className="tk-hint">{t("veVfcHint")}</p>
+        <button type="button" className="tk-btn full" disabled={busy || !captionCount} onClick={() => onVoiceFromCaptions({ translate: false })}><i className="ri-mic-line" />{t("veVfcBtn")}</button>
+        <button type="button" className="tk-btn ghost full" disabled={busy || !captionCount} onClick={() => onVoiceFromCaptions({ translate: true })}><i className="ri-translate-2" />{t("veVfcBtnTr")}</button>
       </section>
       {!user && <p className="tk-hint">{t("tokLogin")}</p>}
     </div>

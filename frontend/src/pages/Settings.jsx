@@ -73,12 +73,12 @@ function Settings() {
                 <div><b>{user.name}</b><span>{user.email}</span></div>
               </div>
               <div className="st-stats">
-                <div><span>{t("settingsTokens")}</span><b>{user.tokens ?? 0}</b></div>
-                <div><span>{t("settingsRole")}</span><b>{user.role || "user"}</b></div>
+                <div><label>{t("settingsTokens")}</label><b>{user.tokens ?? 0}</b></div>
+                <div><label>{t("settingsRole")}</label><b>{user.role || "user"}</b></div>
               </div>
               <div className="st-actions">
                 <Link className="tk-btn small" to="/profile"><i className="ri-edit-2-line" aria-hidden="true" />{t("settingsProfile")}</Link>
-                <Link className="tk-btn ghost small" to="/topup"><i className="ri-coin-line" aria-hidden="true" />{t("settingsTopUp")}</Link>
+                <Link className="tk-btn ghost small" to="/plans"><i className="ri-coin-line" aria-hidden="true" />{t("settingsTopUp")}</Link>
                 <button type="button" className="tk-btn ghost small" onClick={logout}><i className="ri-logout-box-r-line" aria-hidden="true" />{t("settingsLogout")}</button>
               </div>
             </>

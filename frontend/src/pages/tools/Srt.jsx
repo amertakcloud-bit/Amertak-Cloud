@@ -5,7 +5,7 @@ import Waveform from "../../components/tools/Waveform";
 import TokenCost from "../../components/tools/TokenCost";
 import { RATES, tokensForBytes } from "../../lib/tokens";
 import { useAuth } from "../../context/AuthContext";
-import GeminiKeyPanel, { useGeminiAccess } from "../../components/tools/GeminiKey";
+import { KeyNotice, useGeminiAccess } from "../../components/tools/GeminiKey";
 import { useLanguage } from "../../context/LanguageContext";
 import { useFeedback } from "../../components/ui/Feedback";
 import useToolsStatus from "../../hooks/useToolsStatus";
@@ -212,7 +212,7 @@ export default function Srt() {
 
   return (
     <ToolShell icon="ri-closed-captioning-line" titleKey="Srt" subKey="srtSub">
-      <GeminiKeyPanel status={status} access={access} />
+      <KeyNotice access={access} />
 
       <div className="tk-card">
         <Dropzone accept="audio/*,video/*,.mp3,.wav,.m4a,.ogg,.flac,.aac,.mp4,.mov,.webm,.mkv" file={file} onFile={(f) => { setFile(f); setResult(null); setCues([]); setError(""); }}

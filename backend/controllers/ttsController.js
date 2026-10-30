@@ -17,7 +17,7 @@ export function getTtsStatus(_req, res) {
     provider: provider(),
     voices: gem ? GEMINI_VOICES : KHMER_VOICES,
     styles: gem ? Object.keys(STYLES) : [],
-    needsOwnKey: gem,
+    needsOwnKey: false,
     maxCharacters: MAX_TEXT_LENGTH,
     ranges: gem ? {} : { rate: [-50, 100], pitch: [-50, 50], volume: [-50, 50] },
   });

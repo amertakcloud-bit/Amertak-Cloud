@@ -22,9 +22,9 @@ export default function TokenCost({ bytes, perMB, className = "" }) {
   const short = cost > balance;
   return (
     <div className={`tk-hint ${className}`} role="status" style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px", alignItems: "center" }}>
-      <span><i className="ri-coin-line" /> {t("tokCost")}: <b>{cost || "—"}</b> {t("tokUnit")}</span>
-      <span>{t("tokBalance")}: <b style={{ color: short ? "#ef4444" : undefined }}>{balance}</b></span>
-      <span style={{ opacity: 0.8 }}>({t("tokPerMB").replace("{n}", String(perMB))})</span>
+      <p><i className="ri-coin-line" /> {t("tokCost")}: <b>{cost || "—"}</b> {t("tokUnit")}</p>
+      <p>{t("tokBalance")}: <b style={{ color: short ? "#ef4444" : undefined }}>{balance}</b></p>
+      <p style={{ opacity: 0.8 }}>({t("tokPerMB").replace("{n}", String(perMB))})</p>
       {short && <Link to="/plants" style={{ color: "var(--primary)", fontWeight: 600 }}>{t("tokBuy")}</Link>}
     </div>
   );

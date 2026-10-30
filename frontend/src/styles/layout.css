@@ -54,19 +54,33 @@
 
 /* Buttons */
 .primary-btn {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 8px;
-  background: var(--primary);
-  color: #fff;
-  padding: 10px 18px;
+  background: var(--text);
+  color: var(--bg);
+  padding: .3rem;
   border-radius: 10px;
   font-weight: 500;
   transition: background var(--transition), transform var(--transition);
+  font-family: "Kantumruy" !important;
+
+  span, p {
+    color: var(--bg);
+  }
+  i {
+    background: var(--bg);
+    color: var(--text);
+    padding: .5rem;
+    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
 }
 
 .primary-btn:hover {
-  background: var(--primary-hover);
+  background: var(--text);
 }
 
 .icon-btn {

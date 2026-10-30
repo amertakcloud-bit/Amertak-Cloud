@@ -2,7 +2,8 @@ import { RATES } from "../lib/billing.js";
 import { isCloudShareAvailable } from "../services/cloudShareService.js";
 import { Readable } from "node:stream";
 import { AppError } from "../lib/AppError.js";
-import { serverKeyConfigured, getModels } from "../lib/geminiClient.js";
+import { getModels } from "../lib/geminiClient.js";
+import { getAdminGeminiKey } from "../lib/settings.js";
 import { asyncHandler } from "../middleware/errorMiddleware.js";
 import { KHMER_VOICES } from "../lib/edgeTts.js";
 import { generateQr } from "../services/qr/index.js";
@@ -15,7 +16,8 @@ import { BITRATES, convertToAudio, FORMATS } from "../services/audio/convert.js"
 import { MAX_UPLOAD_MB } from "../lib/limits.js";
 
 // GET /api/tools — what the frontend can offer, straight from the server's real config.
-export const getTools = (req, res) => {
+export const getTools = asyncHandler(async (req, res) => {
+  const adminKey = Boolean((await getAdminGeminiKey()).key);
   res.json({
     success: true,
     data: {
@@ -25,15 +27,15 @@ export const getTools = (req, res) => {
       tools: {
         qr: { available: true, types: QR_TYPES },
         tts: { available: true, voices: KHMER_VOICES },
-        srt: { available: true, model: getModels().transcribe, serverKey: serverKeyConfigured() },
-        imagePrompt: { available: true, styles: Object.keys(STYLES), serverKey: serverKeyConfigured() },
+        srt: { available: true, model: getModels().transcribe, serverKey: adminKey },
+        imagePrompt: { available: true, styles: Object.keys(STYLES), serverKey: adminKey },
         videoEditor: { available: isCloudShareAvailable(), voices: ["piseth", "sreymom"], captionPerMB: RATES.captionPerMB },
         video: { available: true, providers: ["tiktok", "pinterest", "direct"] },
         audio: { available: true, formats: Object.keys(FORMATS), bitrates: BITRATES, serverMaxMb: MAX_UPLOAD_MB },
       },
     },
   });
-};
+});
 
 // POST /api/qr  { type, data, options } → image bytes (png/svg)
 export const createQr = asyncHandler(async (req, res) => {

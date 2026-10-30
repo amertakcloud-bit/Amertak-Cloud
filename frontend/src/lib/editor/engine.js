@@ -250,21 +250,40 @@ export class Engine {
     lines.forEach((l, i) => {
       const y = top + lh * i + lh / 2;
       if (st.shadow) { g.shadowColor = "rgba(0,0,0,.7)"; g.shadowBlur = px / 4; g.shadowOffsetY = px / 14; }
-      const paint = (txt, x, color) => {
-        if (st.outline) { g.lineWidth = Math.max(2, px / 7); g.strokeStyle = st.outlineColor || "rgba(0,0,0,.85)"; g.lineJoin = "round"; g.strokeText(txt, x, y, maxW); }
+      const paint = (txt, x, color, yy = y) => {
+        if (st.outline) { g.lineWidth = Math.max(2, px / 7); g.strokeStyle = st.outlineColor || "rgba(0,0,0,.85)"; g.lineJoin = "round"; g.strokeText(txt, x, yy, maxW); }
         g.fillStyle = color;
-        g.fillText(txt, x, y, maxW);
+        g.fillText(txt, x, yy, maxW);
       };
       if (tokensPerLine) {
         const toks = tokensPerLine[i];
         const total = toks.reduce((sum, k) => sum + g.measureText(k.s).width, 0);
         let x = st.align === "left" ? ax : st.align === "right" ? ax - total : ax - total / 2;
         const keep = g.textAlign;
+        const mode = st.hlMode || "color";
+        const hl = st.hl || DEFAULT_HIGHLIGHT, base = st.color || "#fff";
         g.textAlign = "left";
         for (const k of toks) {
-          const on = k.word && wordNo++ === active;
-          paint(k.s, x, on ? (st.hl || DEFAULT_HIGHLIGHT) : (st.color || "#fff"));
-          x += g.measureText(k.s).width;
+          const w = g.measureText(k.s).width;
+          const idx = k.word ? wordNo++ : -1;
+          const on = idx >= 0 && idx === active;
+          if (on && mode === "box") {
+            g.save(); g.shadowColor = "transparent";
+            g.fillStyle = st.hlBg || hl; roundRect(g, x - px * 0.14, y - lh * 0.42, w + px * 0.28, lh * 0.84, px * 0.22); g.fill();
+            g.restore();
+            paint(k.s, x, st.hlText || "#111");
+          } else if (on && mode === "underline") {
+            paint(k.s, x, base);
+            g.fillStyle = hl; g.fillRect(x, y + px * 0.52, w, Math.max(3, px / 8));
+          } else if (on && mode === "pop") {
+            g.save(); g.translate(x + w / 2, y); g.scale(1.22, 1.22); paint(k.s, -w / 2, 0, hl); g.restore();
+          } else if (on && mode === "glow") {
+            g.save(); g.shadowColor = hl; g.shadowBlur = px * 0.7; paint(k.s, x, hl); g.restore();
+          } else {
+            const spoken = mode === "fill" && idx >= 0 && active >= 0 && idx < active;
+            paint(k.s, x, on || spoken ? hl : base);
+          }
+          x += w;
         }
         g.textAlign = keep;
       } else {

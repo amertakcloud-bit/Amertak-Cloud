@@ -269,19 +269,25 @@ test("Gemini TTS: Interactions request shape, voice/style mapping, long text, MP
   delete process.env.TTS_TIMEOUT_MS;
 });
 
-test("TTS access: free tool needs the visitor's OWN key; paid job may use the server key", async () => {
-  const { requireOwnGeminiKey, ttsAccess } = await import("../middleware/geminiKey.js");
-  const run = (mw, req) => new Promise((res) => mw(Object.assign(req, { get: (k) => req.headers?.[k.toLowerCase()], headers: req.headers || {} }), {}, (e) => res(e || null)));
+test("TTS access: free tool works for guests with the site key (short text); paid job needs login + job", async () => {
+  const { ttsAccess } = await import("../middleware/geminiKey.js");
+  const run = (mw, req) => new Promise((res) => mw(Object.assign(req, { get: (k) => req.headers?.[k.toLowerCase()], headers: req.headers || {}, body: req.body || {} }), {}, (e) => res(e || null)));
   process.env.GEMINI_API_KEY = "server-key-server-key-server-key-1234";
-  // guest, no key → rejected; logged-in user without own key → rejected (server key must NOT be used)
-  assert.equal((await run(requireOwnGeminiKey, {}))?.code, "OWN_KEY_REQUIRED");
-  assert.equal((await run(requireOwnGeminiKey, { user: { _id: "u1" } }))?.code, "OWN_KEY_REQUIRED");
-  // own key in the header → ok
-  const req = { headers: { "x-gemini-api-key": "AIzaSyA1234567890abcdefghijklmnopqrstuv" } };
-  assert.equal(await run(requireOwnGeminiKey, req), null);
+  // guest, no own key → allowed with the site key
+  const g = { headers: {}, body: { text: "សួស្តី" } };
+  assert.equal(await run(ttsAccess, g), null);
+  assert.equal(g.gemini?.source, "server");
+  // guests get a shorter limit than logged-in users
+  assert.equal((await run(ttsAccess, { headers: {}, body: { text: "x".repeat(1300) } }))?.code, "TEXT_TOO_LONG");
+  assert.equal(await run(ttsAccess, { headers: {}, user: { _id: "u1" }, body: { text: "x".repeat(1300) } }), null);
+  // own key in the header wins over the site key
+  const req = { headers: { "x-gemini-api-key": "AIzaSyA1234567890abcdefghijklmnopqrstuv" }, body: { text: "a" } };
+  assert.equal(await run(ttsAccess, req), null);
   assert.equal(req.gemini?.source, "user");
+  // no key anywhere → clear message for the admin
+  delete process.env.GEMINI_API_KEY;
+  assert.equal((await run(ttsAccess, { headers: {}, body: { text: "a" } }))?.code, "NO_SERVER_KEY");
   // paid editor path: needs login and a valid job
   assert.equal((await run(ttsAccess, { headers: { "x-job": "bad" } }))?.code, "LOGIN_REQUIRED");
   assert.equal((await run(ttsAccess, { headers: { "x-job": "bad" }, user: { _id: "u1" } }))?.code, "JOB_REQUIRED");
-  delete process.env.GEMINI_API_KEY;
 });

@@ -100,12 +100,12 @@ function Home() {
       {/* Get Start*/}
       <h3 className="home-h3">{t('getStart')}</h3>
       <div style={{ display: 'flex', gap: '.5rem', margin: '0 auto'}}>
-        <NavLink className="getstart" to="/getstart">
+        <NavLink className="primary-btn" to="/getstart">
           <i className="ri-flashlight-line"></i>
           <span>{t('getStart')}</span>
         </NavLink>
 
-        <NavLink className="getstart" to="/register">
+        <NavLink className="primary-btn" to="/register">
           <i className="ri-user-line"></i>
           <span>{t('register')}</span>
         </NavLink>

@@ -2,6 +2,7 @@ import { resolveGeminiKey } from "../lib/geminiClient.js";
 import { AppError } from "../lib/AppError.js";
 import { verifyJob } from "../lib/billing.js";
 import { decryptSecret } from "../lib/secretBox.js";
+import { applyModelOverrides, getAdminGeminiKey } from "../lib/settings.js";
 
 // requireGeminiKey
 // Picks the Gemini key for this request, in order:
@@ -17,6 +18,8 @@ export async function requireGeminiKey(req, _res, next) {
       const saved = decryptSecret(u?.geminiKeyEnc);
       if (saved) req.savedGeminiKey = saved;
     }
+    req.adminGeminiKey = await getAdminGeminiKey();
+    await applyModelOverrides();
     req.gemini = resolveGeminiKey(req);
     next();
   } catch (err) {
@@ -24,25 +27,17 @@ export async function requireGeminiKey(req, _res, next) {
   }
 }
 
-// requireOwnGeminiKey
-// For FREE tools: the request must use the visitor's own key (typed in the browser or saved in the account),
-// never the server's key — so a free tool can never spend the site owner's Gemini quota.
-export function requireOwnGeminiKey(req, res, next) {
-  requireGeminiKey(req, res, (err) => {
-    const noOwn = err && ["LOGIN_REQUIRED", "NO_SERVER_KEY"].includes(err.code);
-    if (noOwn || (!err && req.gemini?.source === "server")) {
-      return next(new AppError(400, "OWN_KEY_REQUIRED", "Enter your own Gemini API key to use the voice tool (it is free; the key stays private)."));
-    }
-    return next(err);
-  });
-}
-
 // ttsAccess
 //   • x-job header  → paid Video-Editor voice: logged in + a valid, paid "voice" job; may use the server key.
-//   • no x-job      → free TTS tool: the user's own Gemini key is required.
+//   • no x-job      → free TTS tool: guests allowed (short text), uses the site key or the user's saved key.
 export async function ttsAccess(req, res, next) {
   const job = req.get?.("x-job");
-  if (!job) return requireOwnGeminiKey(req, res, next);
+  if (!job) {
+    // Free tool: works for guests too, with the site's key (or the user's own saved key) — short texts for guests.
+    const cap = req.user ? 3000 : 1200;
+    if (String(req.body?.text || "").length > cap) return next(new AppError(400, "TEXT_TOO_LONG", req.user ? "Text is too long (max 3000 characters)." : "Guests can convert up to 1200 characters. Log in for up to 3000."));
+    return requireGeminiKey(req, res, next);
+  }
   try {
     if (!req.user) throw new AppError(401, "LOGIN_REQUIRED", "Please log in to use voices in the Video Editor.");
     await verifyJob(job, req.user._id, "voice");

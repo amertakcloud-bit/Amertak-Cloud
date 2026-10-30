@@ -20,14 +20,14 @@ test("chunker: short audio is one chunk", () => {
   assert.deepEqual(planChunks(new Float32Array(0), RATE), []);
 });
 
-test("chunker: long audio is contiguous, ≤100 s, and cuts inside silence", () => {
-  const gaps = [88, 175, 262];
+test("chunker: long audio is contiguous, ≤60 s, and cuts inside silence", () => {
+  const gaps = [44, 88, 132, 176, 220, 264];
   const s = signal(300, gaps);
   const plan = planChunks(s, RATE);
   assert.equal(plan[0].start, 0);
   assert.equal(plan.at(-1).end, s.length);
   for (let i = 0; i < plan.length; i++) {
-    assert.ok((plan[i].end - plan[i].start) / RATE <= 100.001, `chunk ${i} too long`);
+    assert.ok((plan[i].end - plan[i].start) / RATE <= 60.001, `chunk ${i} too long`);
     if (i) assert.equal(plan[i].start, plan[i - 1].end);
   }
   // every internal cut lands in one of the silent gaps (never inside a word)
@@ -40,7 +40,7 @@ test("chunker: long audio is contiguous, ≤100 s, and cuts inside silence", () 
 test("chunker: continuous speech still splits under the limit", () => {
   const plan = planChunks(signal(500, []), RATE);
   assert.ok(plan.length >= 5);
-  assert.ok(plan.every((c) => (c.end - c.start) / RATE <= 100.001));
+  assert.ok(plan.every((c) => (c.end - c.start) / RATE <= 60.001));
 });
 
 test("wav encoder header + data", async () => {

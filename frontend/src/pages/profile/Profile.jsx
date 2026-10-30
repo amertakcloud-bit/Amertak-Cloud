@@ -128,14 +128,14 @@ function Profile() {
         </div>
 
         <div className="button profile-btn">
-          <button type="submit" disabled={saving} className={saving ? "is-loading" : ""}>
+          <button type="submit" disabled={saving} className={saving ? "is-loading" : "primary-btn"}>
             <i
               className={saving ? "ri-loader-4-line is-spinning" : "ri-save-3-line"}
               aria-hidden="true"
             ></i>
             {saving ? t("saving") : t("saveChanges")}
           </button>
-          <button type="button" onClick={handleLogout} disabled={loggingOut}>
+          <button type="button" onClick={handleLogout} disabled={loggingOut} className="primary-btn">
             <i
               className={loggingOut ? "ri-loader-4-line is-spinning" : "ri-logout-box-r-line"}
               aria-hidden="true"

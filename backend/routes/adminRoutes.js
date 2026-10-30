@@ -7,6 +7,11 @@ import {
   listUsers,
   getUserDetail,
   addTokens,
+  getGeminiSetting,
+  putGeminiSetting,
+  deleteGeminiSetting,
+  testGeminiSetting,
+  sendBroadcast,
   setRole,
   setBan,
   listPayments,
@@ -61,6 +66,11 @@ adminProtectedRouter.post("/users/:userId/ban", requirePerm("users.ban"), setBan
 adminProtectedRouter.get("/audit", requirePerm("audit.read"), listAudit);
 adminProtectedRouter.get("/payments", requirePerm("payments.read"), listPayments);
 adminProtectedRouter.get("/stats", requirePerm("stats.read"), adminStats);
+adminProtectedRouter.get("/settings/gemini", admin, getGeminiSetting);
+adminProtectedRouter.put("/settings/gemini", admin, putGeminiSetting);
+adminProtectedRouter.delete("/settings/gemini", admin, deleteGeminiSetting);
+adminProtectedRouter.post("/settings/gemini/test", admin, testGeminiSetting);
+adminProtectedRouter.post("/broadcast", admin, sendBroadcast);
 adminProtectedRouter.get("/promo-codes", admin, listPromoCodes);
 adminProtectedRouter.post("/promo-codes", admin, createPromoCode);
 adminProtectedRouter.delete("/promo-codes/:id", admin, deletePromoCode);

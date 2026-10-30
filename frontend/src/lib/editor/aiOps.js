@@ -21,6 +21,9 @@ function safeStyle(s) {
   if (typeof s.outlineColor === "string" && COLOR.test(s.outlineColor)) o.outlineColor = s.outlineColor;
   if (typeof s.bg === "string" && /^(rgba\([\d\s.,]+\)|transparent)$/.test(s.bg)) o.bg = s.bg;
   if (typeof s.hl === "string" && COLOR.test(s.hl)) o.hl = s.hl;
+  if (typeof s.hlBg === "string" && COLOR.test(s.hlBg)) o.hlBg = s.hlBg;
+  if (typeof s.hlText === "string" && COLOR.test(s.hlText)) o.hlText = s.hlText;
+  if (["color", "box", "underline", "pop", "glow", "fill"].includes(s.hlMode)) o.hlMode = s.hlMode;
   for (const k of ["bold", "italic", "outline", "shadow", "karaoke"]) if (typeof s[k] === "boolean") o[k] = s[k];
   if (["left", "center", "right"].includes(s.align)) o.align = s.align;
   if (FONTS.includes(s.font)) o.font = s.font;

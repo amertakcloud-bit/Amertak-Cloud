@@ -31,3 +31,5 @@
 .ud-empty { color: var(--text-muted); font-size: 14px; margin: 0; }
 @media (max-width: 900px) { .ud-stats { grid-template-columns: repeat(2, 1fr); } .ud-two { grid-template-columns: 1fr; } }
 @media (max-width: 420px) { .ud-stats { grid-template-columns: 1fr; } .ud-bars { height: 160px; } }
+
+.ud-quick{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 8px}

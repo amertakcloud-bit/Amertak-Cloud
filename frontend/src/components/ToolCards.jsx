@@ -5,7 +5,7 @@ function ToolCards({ name, icon, describe , tag, path, aosDelay }) {
     const { t } = useLanguage();
     return (
         <NavLink className="card glass" to={path} data-aos="fade-up" data-aos-delay={aosDelay}>
-            <div className="icon">
+            <div className="icon" style={{ background: `hsl(${Math.floor(Math.random()* 360)%360}, 100%, 50%)` }}>
                 <i className={icon}></i>
             </div>
             <div className="info">

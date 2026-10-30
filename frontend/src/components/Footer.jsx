@@ -1,6 +1,7 @@
 import { NavLink } from "react-router-dom";
 import { useLanguage } from "../context/LanguageContext";
-import favIcon from "../assets/favicon/favicon.svg";
+import logo from "../assets/favicon/logo.svg"
+import logoTitle from "../assets/favicon/logoTitle.svg"
 
 const LINKS = [
   { to: "/", key: "home" },
@@ -22,8 +23,8 @@ function Footer() {
       <div className="sf-grid">
         <div className="sf-col sf-about">
           <div className="sf-brand">
-            <img src={favIcon} alt="" width={28} height={28} />
-            <span className="grad">Amertak Cloud</span>
+            <img src={logo} width={30} />
+            <img src={logoTitle} width={80}/>
           </div>
           <p>{t("footerAbout")}</p>
         </div>

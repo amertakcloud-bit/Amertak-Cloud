@@ -22,7 +22,7 @@ export const en = {
   dGenerateQr: "Create QR codes for links, Wi-Fi, contacts and more — PNG or SVG.",
 
   // Gemini key
-  keyRequired: "Gemini API key required", keyUsingYours: "Using your Gemini key", keyUsingServer: "Using the server's Gemini key (logged in)",
+  keyAdminMissing: "The AI key is not set up yet. Please contact the site admin.", keyRequired: "Gemini API key required", keyUsingYours: "Using your Gemini key", keyUsingServer: "Using the server's Gemini key (logged in)",
   keyLoginOrPaste: "Log in to use the server key, or add your own key.", keyPasteHint: "Add your own Gemini API key to use this tool.",
   keyMemoryOnly: "Your key stays in this browser tab's memory and is only sent to this site's API.",
   keyAdd: "Add key", keyChange: "Change key", keyRemove: "Remove", keyDialogTitle: "Your Gemini API key",
@@ -72,7 +72,7 @@ export const en = {
 
   // CloudShare
   settingsAppearance: "Appearance", settingsTheme: "Theme", settingsDark: "Dark", settingsLight: "Light", settingsReduce: "Reduce animations", settingsReduceHint: "Fewer movements and shimmer effects. Good for slow phones.",
-  settingsAccount: "Account", settingsPlan: "Tokens and billing", settingsGemini: "Gemini API key", settingsGeminiHint: "Used by the free Voice tool and by AI features. Saved encrypted on your account when you are logged in.",
+  settingsAccount: "Account", settingsPlan: "Tokens and billing", settingsGemini: "Gemini API key", settingsGeminiHint: "Optional. The site already provides an AI key, so you never need to add one. If you add your own, AI features use it instead. It is saved encrypted on your account, and you can add or remove it only here.",
   settingsData: "Data on this device", settingsDataHint: "Resets language, theme and animation choices stored in this browser. Your projects and account are not touched.", settingsReset: "Reset preferences", settingsDone: "Preferences reset.",
   settingsLogin: "Log in to see your account.", settingsRole: "Role", settingsTokens: "Tokens", settingsTopUp: "Top up", settingsProfile: "Edit profile", settingsLogout: "Log out", settingsLangHint: "Changes the whole site.",
   csHow: "How it works", csStep1: "Upload", csStep1d: "Choose or drop a file.", csStep2: "Pick an expiry", csStep2d: "The link can stop working after 1 hour, 1 day or 7 days.", csStep3: "Share the link", csStep3d: "Anyone with the link can download it.", csPriceNote: "Uploads cost {n} tokens per MB (rounded up).",
@@ -122,7 +122,7 @@ export const km = {
   dTts: "បង្កើតសម្លេងខ្មែរធម្មជាតិពីអត្ថបទ (រហូតដល់ ៣០០០ តួអក្សរ)។",
   dGenerateQr: "បង្កើត QR code សម្រាប់តំណ Wi-Fi ទំនាក់ទំនង និងច្រើនទៀត — PNG ឬ SVG។",
 
-  keyRequired: "ត្រូវការ Gemini API key", keyUsingYours: "កំពុងប្រើ Gemini key របស់អ្នក", keyUsingServer: "កំពុងប្រើ Gemini key របស់ម៉ាស៊ីនបម្រើ (បានចូលគណនី)",
+  keyAdminMissing: "មិនទាន់បានដាក់ AI key ទេ សូមទាក់ទងអ្នកគ្រប់គ្រងគេហទំព័រ។", keyRequired: "ត្រូវការ Gemini API key", keyUsingYours: "កំពុងប្រើ Gemini key របស់អ្នក", keyUsingServer: "កំពុងប្រើ Gemini key របស់ម៉ាស៊ីនបម្រើ (បានចូលគណនី)",
   keyLoginOrPaste: "ចូលគណនីដើម្បីប្រើ key របស់ម៉ាស៊ីនបម្រើ ឬបន្ថែម key ផ្ទាល់ខ្លួន។", keyPasteHint: "បន្ថែម Gemini API key ផ្ទាល់ខ្លួនដើម្បីប្រើឧបករណ៍នេះ។",
   keyMemoryOnly: "Key របស់អ្នកស្ថិតក្នុងអង្គចងចាំនៃផ្ទាំង browser នេះ ហើយផ្ញើទៅ API នៃគេហទំព័រនេះប៉ុណ្ណោះ។",
   keyAdd: "បន្ថែម key", keyChange: "ប្តូរ key", keyRemove: "ដកចេញ", keyDialogTitle: "Gemini API key របស់អ្នក",
@@ -166,7 +166,7 @@ export const km = {
 
   csChooseFile: "សូមជ្រើសរើសឯកសារជាមុនសិន។",   csUnavailable: "CloudShare មិនទាន់ត្រូវបានរៀបចំលើម៉ាស៊ីនបម្រើនេះទេ (ខ្វះមូលដ្ឋានទិន្នន័យ CloudShare)។",
   settingsAppearance: "រូបរាង", settingsTheme: "ស្បែកអេក្រង់", settingsDark: "ងងឹត", settingsLight: "ភ្លឺ", settingsReduce: "កាត់បន្ថយចលនា", settingsReduceHint: "ចលនាតិចជាងមុន សមរម្យសម្រាប់ទូរស័ព្ទយឺត។",
-  settingsAccount: "គណនី", settingsPlan: "Token និងការបង់ប្រាក់", settingsGemini: "Gemini API key", settingsGeminiHint: "ប្រើសម្រាប់ឧបករណ៍សម្លេងឥតគិតថ្លៃ និង AI។ រក្សាទុកដោយអ៊ីនគ្រីបក្នុងគណនីរបស់អ្នក ពេលចូលគណនី។",
+  settingsAccount: "គណនី", settingsPlan: "Token និងការបង់ប្រាក់", settingsGemini: "Gemini API key", settingsGeminiHint: "ជម្រើស។ គេហទំព័រមាន AI key រួចហើយ អ្នកមិនចាំបាច់ដាក់ទេ។ បើអ្នកដាក់ key ផ្ទាល់ខ្លួន ការប្រើ AI នឹងប្រើវាជំនួស។ រក្សាទុកដោយអ៊ីនគ្រីប ហើយអាចបន្ថែម/លុបបានតែក្នុងទំព័រនេះ។",
   settingsData: "ទិន្នន័យលើឧបករណ៍នេះ", settingsDataHint: "កំណត់ភាសា ស្បែក និងចលនាឡើងវិញ។ គម្រោង និងគណនីរបស់អ្នកមិនប៉ះពាល់ទេ។", settingsReset: "កំណត់ឡើងវិញ", settingsDone: "បានកំណត់ឡើងវិញ។",
   settingsLogin: "សូមចូលគណនី ដើម្បីមើលគណនីរបស់អ្នក។", settingsRole: "តួនាទី", settingsTokens: "Token", settingsTopUp: "បញ្ចូល Token", settingsProfile: "កែប្រូហ្វាល់", settingsLogout: "ចាកចេញ", settingsLangHint: "ផ្លាស់ប្តូរទាំងគេហទំព័រ។",
   csHow: "របៀបប្រើ", csStep1: "ផ្ទុកឡើង", csStep1d: "ជ្រើសរើស ឬទម្លាក់ឯកសារ។", csStep2: "កំណត់ពេលផុតកំណត់", csStep2d: "តំណអាចឈប់ដំណើរការបន្ទាប់ពី ១ ម៉ោង ១ ថ្ងៃ ឬ ៧ ថ្ងៃ។", csStep3: "ចែករំលែកតំណ", csStep3d: "អ្នកមានតំណអាចទាញយកបាន។", csPriceNote: "ការផ្ទុកឡើងគិត {n} token ក្នុង ១ MB (បង្គត់ឡើង)។",

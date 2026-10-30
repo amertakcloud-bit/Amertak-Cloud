@@ -14,7 +14,7 @@ const interactionsClient = (words, spy = {}) => ({
 });
 const speechWav = () => makeWav([{ sec: 0.5, tone: 0 }, { sec: 2, tone: 300 }, { sec: 0.5, tone: 0 }]);
 
-test("key resolution: user key any format, server key only when logged in", () => {
+test("key resolution: user key any format, then the admin/site key (guests allowed)", () => {
   for (const k of ["AIzaSyA1234567890abcdef", "AQ.Ab8RN6Kexample-key_123", "some-other-format-key-99"]) assert.ok(isValidKeyFormat(k));
   assert.ok(!isValidKeyFormat("short"));
   assert.ok(!isValidKeyFormat("has space in it 12345"));
@@ -22,8 +22,9 @@ test("key resolution: user key any format, server key only when logged in", () =
   assert.deepEqual(resolveGeminiKey(req({ "x-gemini-api-key": "AQ.Ab8RN6Kexample" })), { key: "AQ.Ab8RN6Kexample", source: "user" });
   const prev = process.env.GEMINI_API_KEY;
   process.env.GEMINI_API_KEY = "server-key-123456789";
-  assert.throws(() => resolveGeminiKey(req({})), (e) => e.code === "LOGIN_REQUIRED" && e.statusCode === 401);
-  assert.equal(resolveGeminiKey(req({}, { id: 1 })).source, "server");
+  assert.equal(resolveGeminiKey(req({})).source, "server");
+  const withAdmin = { ...req({}), adminGeminiKey: { key: "admin-key-123456789", source: "admin" } };
+  assert.equal(resolveGeminiKey(withAdmin).key, "admin-key-123456789");
   delete process.env.GEMINI_API_KEY;
   assert.throws(() => resolveGeminiKey(req({}, { id: 1 })), (e) => e.code === "NO_SERVER_KEY");
   assert.throws(() => resolveGeminiKey(req({ "x-gemini-api-key": "bad key" })), (e) => e.code === "INVALID_API_KEY_FORMAT");
@@ -114,7 +115,7 @@ test("cues controller: segment fallback, empty, bad input", async () => {
   assert.equal((await call(validateKey, { headers: {} })).err.code, "NO_API_KEY");
   assert.equal((await call(validateKey, { headers: { "x-gemini-api-key": "x y" } })).err.code, "INVALID_API_KEY_FORMAT");
   const st = await call(getStatus, {});
-  assert.equal(st.res.body.data.serverKeyNeedsLogin, true);
+  assert.equal(st.res.body.data.serverKeyNeedsLogin, false);
 });
 
 test("SRT format", () => {

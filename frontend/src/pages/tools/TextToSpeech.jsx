@@ -5,7 +5,7 @@ import { friendlyError } from "../../lib/errors";
 import { useFeedback } from "../../components/ui/Feedback";
 import { useLanguage } from "../../context/LanguageContext";
 import Select from "../../components/ui/Select";
-import GeminiKeyPanel, { useGeminiAccess } from "../../components/tools/GeminiKey";
+import { KeyNotice, useGeminiAccess } from "../../components/tools/GeminiKey";
 import useToolsStatus from "../../hooks/useToolsStatus";
 
 // Gemini TTS voices (the server sends the real list; this is the fallback while it loads).
@@ -17,6 +17,7 @@ const FALLBACK_VOICES = [
 ];
 const SPEED_OPTIONS = [0.5, 1, 1.5, 2];
 // delivery style → [English, ខ្មែរ]
+const STYLE_ICONS = { natural: "ri-user-voice-line", warm: "ri-heart-3-line", calm: "ri-leaf-line", cheerful: "ri-emotion-happy-line", serious: "ri-shield-star-line", fast: "ri-speed-up-line" };
 const STYLE_LABELS = {
   natural: ["Natural", "ធម្មតា"], warm: ["Warm & friendly", "កក់ក្តៅ ស្និទ្ធស្នាល"], calm: ["Calm & slow", "ស្ងប់ និងយឺត"],
   cheerful: ["Cheerful", "រីករាយ"], serious: ["Serious & clear", "ម៉ឺងម៉ាត់ ច្បាស់"], fast: ["A bit faster", "លឿនបន្តិច"],
@@ -38,9 +39,7 @@ export default function TextToSpeech() {
   const km = language === "km";
   const { data: toolsStatus } = useToolsStatus();
   const access = useGeminiAccess(toolsStatus);
-  // The free voice tool never uses the site's key: only a key typed here or saved in the account counts.
-  const ownKey = access.source === "user" || access.source === "account";
-  const panelAccess = ownKey ? access : { ...access, source: "none", ready: false };
+  const ownKey = access.ready; // the site key (set by the admin) works for everyone, guests included
   const [text, setText] = useState("");
   const [voices, setVoices] = useState(FALLBACK_VOICES);
   const [voice, setVoice] = useState("Puck");
@@ -199,16 +198,16 @@ export default function TextToSpeech() {
       <header className="tts-head">
         <span className="tts-badge"><i className="ri-voice-ai-line" aria-hidden="true" /></span>
         <div>
-          <h1 className="tts-title">Khmer AI <span>Voice</span></h1>
-          <p className="tts-sub">{km ? "បម្លែងអត្ថបទទៅជាសម្លេង AI ពិត ដោយឥតគិតថ្លៃ — ប្រើ Gemini API key របស់អ្នកផ្ទាល់ (មិនកាត់ token)។" : "Turn text into natural AI speech — free, using your own Gemini API key (no tokens charged)."}</p>
+          <h1 style={{fontWeight: "normal"}} className="tts-title">{t("TextToSpeech")}</h1>
+          <p className="tts-sub">{km ? "បម្លែងអត្ថបទទៅជាសម្លេង AI ពិត ដោយឥតគិតថ្លៃ — មិនបាច់ចូលគណនី។" : "Turn text into natural AI speech — free, no login needed."}</p>
         </div>
       </header>
 
-      <GeminiKeyPanel status={toolsStatus} access={panelAccess} />
+      <KeyNotice access={access} />
 
       <form className="tts-grid" onSubmit={handleGenerate}>
         <section className="tts-card tts-main">
-          <label className="tts-label" htmlFor="tts-text"><i className="ri-edit-2-line" aria-hidden="true" /> {km ? "បញ្ចូលអត្ថបទ" : "Your text"}</label>
+          <p className="tts-label" htmlFor="tts-text"><i className="ri-edit-2-line" aria-hidden="true" /> {km ? "បញ្ចូលអត្ថបទ" : "Your text"}</p>
           <textarea id="tts-text" className="tts-text" value={text} maxLength={3000} onChange={(e) => setText(e.target.value)} rows={8} placeholder={km ? "វាយបញ្ចូលអត្ថបទ..." : "Type or paste your text…"} />
           <div className="tts-meta">
             <div className="tts-quick">
@@ -220,7 +219,7 @@ export default function TextToSpeech() {
 
         <aside className="tts-card tts-side">
           <div className="tts-field">
-            <span className="tts-label"><i className="ri-mic-ai-line" aria-hidden="true" /> {km ? "ប្រភេទសម្លេង" : "Voice"}</span>
+            <p className="tts-label"><i className="ri-mic-ai-line" aria-hidden="true" /> {km ? "ប្រភេទសម្លេង" : "Voice"}</p>
             <div className="tts-voices" role="radiogroup" aria-label="Voice">
               {voices.map((v) => (
                 <button key={v.value} type="button" role="radio" aria-checked={voice === v.value} className={`tts-voice ${voice === v.value ? "on" : ""}`} onClick={() => setVoice(v.value)}>
@@ -231,25 +230,25 @@ export default function TextToSpeech() {
             </div>
           </div>
 
-          <div className="tts-field">
-            <span className="tts-label"><i className="ri-emotion-line" aria-hidden="true" /> {km ? "រចនាប័ទ្មសម្លេង" : "Style"}</span>
+          <div className="tts-field" style={{ fontFamily: "Kantumruy"}}>
+            <p className="tts-label"><i className="ri-emotion-line" aria-hidden="true" /> {km ? "រចនាប័ទ្មសម្លេង" : "Style"}</p>
             <Select value={style} onChange={(e) => setStyle(e.target.value)}>
-              {Object.entries(STYLE_LABELS).map(([k, [en, kh]]) => <option key={k} value={k}>{km ? kh : en}</option>)}
+              {Object.entries(STYLE_LABELS).map(([k, [en, kh]]) => <option key={k} value={k}><i className={STYLE_ICONS[k]} aria-hidden="true" /> {km ? kh : en}</option>)}
             </Select>
           </div>
 
           <div className="tts-field">
-            <span className="tts-label"><i className="ri-speed-up-line" aria-hidden="true" /> {km ? "ល្បឿនចាក់" : "Playback speed"}</span>
+            <p className="tts-label"><i className="ri-speed-up-line" aria-hidden="true" /> {km ? "ល្បឿនចាក់" : "Playback speed"}</p>
             <div className="tts-seg" role="radiogroup" aria-label="Speed">
               {SPEED_OPTIONS.map((o) => <button key={o} type="button" role="radio" aria-checked={speed === o} className={speed === o ? "on" : ""} onClick={() => setSpeed(o)}>{o}×</button>)}
             </div>
           </div>
 
-          <button type="submit" className="tts-go" disabled={!canGo}>
+          <button type="submit" className="tts-go primary-btn" disabled={!canGo}>
             <i className={isGenerating ? "ri-loader-4-line tts-spin" : "ri-voice-ai-line"} aria-hidden="true" />
             <span>{isGenerating ? (km ? "កំពុងបង្កើត…" : "Generating…") : (km ? "បង្កើតសម្លេង" : "Generate voice")}</span>
           </button>
-          {!ownKey && <p className="tts-warn"><i className="ri-key-2-line" aria-hidden="true" /> {t("keyRequired")}</p>}
+          
         </aside>
       </form>
 

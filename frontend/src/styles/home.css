@@ -93,30 +93,6 @@
 
 }
 
-
-.getstart {
-    display: flex;
-    flex-wrap: wrap;
-    width: max-content;
-    align-items: center;
-    background: var(--text);
-    color: var(--bg);
-    font-family: 'Kantumruy';
-    font-size: 1.5rem;
-    gap: .5rem;
-    border-radius: 10px;
-    padding: .3rem;
-
-    i {
-        color: var(--text);
-        background: var(--bg);
-        padding: .5rem;
-        border-radius: 7px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-}
 /* Home: features + terms */
 .home-h3 { font-family: Kantumruy, system-ui, sans-serif; color: var(--primary); margin: 28px 0 12px; }
 .home-list { margin: 8px 0 0; padding-left: 1.1rem; display: grid; gap: 6px; color: var(--text-muted); line-height: 1.55; }

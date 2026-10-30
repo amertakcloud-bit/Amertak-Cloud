@@ -3,7 +3,7 @@
 //
 //   samples : Float32Array (mono)   rate : sample rate (16000)
 //   returns : [{ start, end }] in SAMPLES, contiguous, covering the whole signal.
-export function planChunks(samples, rate, { target = 90, max = 100, min = 20, windowSec = 12 } = {}) {
+export function planChunks(samples, rate, { target = 45, max = 60, min = 15, windowSec = 8 } = {}) {
   const total = samples.length;
   const maxS = Math.floor(max * rate);
   if (total <= maxS) return total ? [{ start: 0, end: total }] : [];

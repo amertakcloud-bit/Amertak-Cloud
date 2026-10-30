@@ -98,11 +98,16 @@ code {
 }
 
 button {
-  font-family: 'Kantumruy';
+  font-family: 'Kantumruy' !important;
   cursor: pointer;
   border: none;
   background: none;
   color: inherit;
+}
+
+b, label, strong {
+  font-family: "Kantumruy";
+  font-weight: normal;
 }
 
 ul {
