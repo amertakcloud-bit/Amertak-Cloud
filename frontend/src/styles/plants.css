@@ -123,15 +123,6 @@
 
 .promo-code-button {
   border: none;
-  border-radius: 10px;
-  background: var(--text);
-  display: flex;
-  align-items: center;
-  color: var(--bg);
-  padding: 0.35rem;
-  font-weight: 700;
-  gap: 0.3rem;
-  cursor: pointer;
   transition: opacity var(--transition);
 
   i {

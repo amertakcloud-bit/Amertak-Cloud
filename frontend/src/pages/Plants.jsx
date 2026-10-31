@@ -107,7 +107,7 @@ function Plants() {
                 />
                 <button
                     type="button"
-                    className="promo-code-button"
+                    className="promo-code-button primary-btn"
                     onClick={handleApplyPromo}
                     disabled={isApplyingPromo || !promoCode.trim()}
                 >

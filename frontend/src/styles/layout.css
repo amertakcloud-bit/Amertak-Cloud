@@ -60,6 +60,7 @@
   background: var(--text);
   color: var(--bg);
   padding: .3rem;
+  width: max-content;
   border-radius: 10px;
   font-weight: 500;
   transition: background var(--transition), transform var(--transition);

@@ -148,6 +148,10 @@ input:focus-visible {
   font-family: 'Kantumruy';
 }
 
+.center {
+  justify-content: center;
+}
+
 .grad {
   background: var(--grad);
   color: transparent;

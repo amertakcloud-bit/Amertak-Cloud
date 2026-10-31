@@ -139,6 +139,8 @@ input[type="range"].tk-range {
   gap: 4px;
   padding: 4px;
   background: var(--text);
+  color: var(--bg);
+  border: 1px solid var(--border);
   border-radius: 10px;
   overflow-x: auto;
 }
@@ -147,7 +149,6 @@ input[type="range"].tk-range {
   white-space: nowrap;
   padding: 8px 14px;
   border-radius: 7px;
-  color: var(--bg);
   display: inline-flex;
   align-items: center;
   justify-content: center;

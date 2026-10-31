@@ -72,8 +72,9 @@ function Home() {
               {f.items.map((k) => <li key={k}>{t(`hf${f.id}${k}`)}</li>)}
             </ul>
             {f.path && (
-              <NavLink className="home-try" to={f.path}>
-                <span>{t("homeTry")}</span> <i className="ri-arrow-right-line"></i>
+              <NavLink className="primary-btn" to={f.path}>
+                <i className="ri-arrow-right-line"></i>
+                <span>{t("homeTry")}</span>
               </NavLink>
             )}
           </div>

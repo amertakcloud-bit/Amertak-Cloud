@@ -334,7 +334,7 @@
   gap: 16px;
   padding: 12px 16px;
   background: var(--surface-hover);
-  border-radius: 10px;
+  border-radius: 0px;
   font-weight: 600;
   font-size: 0.85rem;
   color: var(--text-muted);
@@ -541,7 +541,7 @@
 }
 
 .admin-btn-primary:hover {
-  background: var(--primary-hover);
+  background: var(--bg);
 }
 
 .admin-btn-secondary {
